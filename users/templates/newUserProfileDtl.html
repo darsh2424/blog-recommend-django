@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Create Profile{% endblock %}
+
+{% block content %}
+<div class="container d-flex justify-content-center align-items-center mt-5">
+  <div class="card shadow p-4 w-100 transition" style="max-width: 500px;">
+    <form id="profileForm" method="POST" enctype="multipart/form-data" action="{% url 'profile_dtl' %}">
+      {% csrf_token %}
+
+      <!-- Avatar -->
+      <div class="text-center mb-4 position-relative">
+        <img id="avatarPreview" src="{{ user.profile.profile_picture }}" alt="Profile Picture"
+             class="rounded-circle border border-2 shadow-sm"
+             style="width: 120px; height: 120px; object-fit: cover;">
+        <label for="profilePicInput" class="position-absolute" style="bottom: 0; right: 40%; cursor: pointer;">
+          <i class="fa fa-plus-circle fa-2x text-dark"></i>
+        </label>
+        <input type="file" id="profilePicInput" name="profile_picture" accept="image/*" class="d-none">
+      </div>
+
+      <!-- Username -->
+      <div class="mb-3">
+        <label for="username" class="form-label fw-bold">Username <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="username" name="username"
+               value="{{ user.username }}" required
+               pattern="^[a-z0-9]{4,15}$"
+               title="4–15 lowercase letters or digits only (e.g., 'john123')">
+        <div class="form-text">4–15 characters, lowercase letters and digits only.</div>
+      </div>
+
+      <!-- Full Name -->
+      <div class="mb-4">
+        <label for="full_name" class="form-label fw-bold">Full Name</label>
+        <input type="text" class="form-control" id="full_name" name="full_name"
+               value="{{ user.profile.full_name }}">
+      </div>
+
+      <!-- Buttons -->
+      <div class="d-flex justify-content-between">
+        <button type="button" class="btn btn-outline-secondary" id="resetBtn" disabled>Reset</button>
+        <button type="submit" class="btn btn-success" id="submitBtn" disabled>Submit & Next</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const originalData = {
+    username: "{{ user.username }}",
+    full_name: "{{ user.profile.full_name|default:'' }}",
+    profile_picture: "{{ user.profile.profile_picture }}"
+  };
+
+  const resetBtn = document.getElementById('resetBtn');
+  const submitBtn = document.getElementById('submitBtn');
+  const usernameInput = document.getElementById('username');
+  const fullNameInput = document.getElementById('full_name');
+  const fileInput = document.getElementById('profilePicInput');
+  const avatar = document.getElementById('avatarPreview');
+
+  let fileChanged = false;
+
+  function validateUsername(username) {
+    return /^[a-z0-9]{4,15}$/.test(username);
+  }
+
+  function enableResetIfChanged() {
+    const usernameChanged = usernameInput.value !== originalData.username;
+    const nameChanged = fullNameInput.value !== originalData.full_name;
+    resetBtn.disabled = !(usernameChanged || nameChanged || fileChanged);
+  }
+
+  function toggleSubmit() {
+    const isValid = validateUsername(usernameInput.value);
+    submitBtn.disabled = !isValid;
+  }
+
+  fileInput.addEventListener('change', (e) => {
+    fileChanged = true;
+    const file = e.target.files[0];
+    if (file) {
+      avatar.src = URL.createObjectURL(file);
+    }
+    enableResetIfChanged();
+  });
+
+  usernameInput.addEventListener('input', () => {
+    toggleSubmit();
+    enableResetIfChanged();
+  });
+
+  fullNameInput.addEventListener('input', enableResetIfChanged);
+
+  resetBtn.addEventListener('click', () => {
+    usernameInput.value = originalData.username;
+    fullNameInput.value = originalData.full_name;
+    avatar.src = originalData.profile_picture;
+    fileInput.value = '';
+    fileChanged = false;
+    toggleSubmit();
+    enableResetIfChanged();
+  });
+
+  document.getElementById('profileForm').addEventListener('submit', (e) => {
+    const usernameChanged = usernameInput.value !== originalData.username;
+    const nameChanged = fullNameInput.value !== originalData.full_name;
+
+    if (!usernameChanged && !nameChanged && !fileChanged) {
+      e.preventDefault();
+      window.location.href = "{% url 'other_dtl' %}";
+    }
+  });
+
+  toggleSubmit();
+</script>
+{% endblock %}
