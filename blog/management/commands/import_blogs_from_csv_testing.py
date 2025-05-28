@@ -68,6 +68,7 @@ class Command(BaseCommand):
                     content=content,
                     image_url=image_url if pd.notnull(image_url) else None,
                     category=category,
+                    views_count=0,
                     like_count=0,
                     comment_count=0,
                     created_at=now() - timedelta(days=random.randint(0, 365))

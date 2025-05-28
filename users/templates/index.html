@@ -1,100 +1,33 @@
 {% extends 'base.html' %}
 
-
-<!-- {% block title %}Home - BlogNest Blogs{% endblock %} -->
+{% block title %}Trending Blogs{% endblock %}
 
 {% block content %}
-<!-- Category Navbar -->
-<div class="category-navbar">
-    <button class="scroll-btn" id="scrollLeft"><i class="fa-solid fa-angle-left"></i></button>
-    <div class="category-wrapper">
-        <div class="category-container" id="categoryContainer">
-            <span>Following</span>
-            <span>Featured</span>
-            <span>Startup</span>
-            <span>Design</span>
-            <span>JavaScript</span>
-            <span>AI</span>
-            <span>Business</span>
-        </div>
-    </div>
-    <button class="scroll-btn" id="scrollRight"><i class="fa-solid fa-angle-right"></i></button>
+<div class="container-fluid">
+  <h4 class="mb-4">Weekly Trending</h4>
+
+  {% if category_post_map %}
+    {% for category, posts in category_post_map %}
+      <h5 class="mt-4">{{ category.name|title }}</h5>
+      <div class="row">
+        {% for post in posts %}
+          <div class="col-md-12 mb-3">
+            {% include 'post_card.html' %}
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Show More Button -->
+      <div class="text-end mb-5">
+        <a href="{% url 'trending_category' category_slug=category.name|slugify %}" class="btn btn-success btn-sm">
+          Show more →
+        </a>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p>No trending categories/posts available.</p>
+  {% endif %}
 </div>
-<!-- Sidebar (Only for Small Screens) -->
-<div class="sidebar" id="sidebar">
-    <button class="btn btn-outline-dark mb-2" id="closeSidebar"><i class="fa-solid fa-bars"></i></button>
-
-    <h5>Categories</h5>
-    <button class="btn btn-outline-dark w-100 mb-2">Following</button>
-    <button class="btn btn-outline-dark w-100 mb-2">Featured</button>
-    <button class="btn btn-outline-dark w-100 mb-2">Startup</button>
-    <button class="btn btn-outline-dark w-100 mb-2">Design</button>
-
-    <h5 class="mt-3">Recommended Topics</h5>
-    <button class="btn btn-outline-dark w-100 mb-2">Technology</button>
-    <button class="btn btn-outline-dark w-100 mb-2">Self Improvement</button>
-</div>
-
-<div class="post-container">
-    <div class="content">
-        <div class="post mb-2">
-            <img src="https://i.etsystatic.com/29488153/r/il/e0f22b/3860244894/il_fullxfull.3860244894_p9az.jpg">
-            <div class="post-content">
-                <h2>The 5 paid subscriptions I actually use in 2025</h2>
-                <p>Tools I use that are cheaper than Netflix</p>
-                <p class="stats">
-                    <i class="fas fa-heart like"></i> 267
-                    <i class="fas fa-comment comment"></i> 42
-                </p>
-            </div>
-        </div>
-
-        <div class="post mb-2">
-            <img src="https://i.etsystatic.com/29488153/r/il/e0f22b/3860244894/il_fullxfull.3860244894_p9az.jpg">
-            <div class="post-content">
-                <h2>The 5 paid subscriptions I actually use in 2025</h2>
-                <p>Tools I use that are cheaper than Netflix</p>
-                <p class="stats">
-                    <i class="fas fa-heart like"></i> 267
-                    <i class="fas fa-comment comment"></i> 42
-                </p>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Fixed Sidebar on Desktop -->
-    <div class="post-sidebar">
-        <h3>My Following</h3>
-        <ul>
-            <li>Technical Guruji</li>
-            <li>Gunjan Boy</li>
-            <li>Tech with Poojan</li>
-            <li>PiyaDev</li>
-        </ul>
-    </div>
-</div>
-
-
-<script>
-    // Category Scroll
-    const categoryContainer = document.getElementById("categoryContainer");
-    const scrollLeft = document.getElementById("scrollLeft");
-    const scrollRight = document.getElementById("scrollRight");
-
-    let scrollIndex = 0;
-    const visibleCategories = 5;
-
-    function updateScroll() {
-        const maxScroll = categoryContainer.children.length - visibleCategories;
-        scrollIndex = Math.min(Math.max(scrollIndex, 0), maxScroll);
-        categoryContainer.style.transform = `translateX(${-scrollIndex * 90}px)`;
-        scrollLeft.disabled = scrollIndex === 0;
-        scrollRight.disabled = scrollIndex === maxScroll;
-    }
-
-    scrollLeft.onclick = () => { scrollIndex--; updateScroll(); };
-    scrollRight.onclick = () => { scrollIndex++; updateScroll(); };
-</script>
-
 {% endblock %}
+
+

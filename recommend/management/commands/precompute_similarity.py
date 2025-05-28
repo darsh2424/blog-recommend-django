@@ -1,3 +1,5 @@
+# blog/management/commands/precompute_similarity.py
+
 import os
 import pandas as pd
 import pickle
@@ -10,37 +12,37 @@ class Command(BaseCommand):
     help = "Precompute blog post similarity matrix and save to disk (for recommendation system)"
 
     def handle(self, *args, **options):
-        posts = Post.objects.all().values('id', 'title', 'content')
-        df = pd.DataFrame(posts)
+        try:
+            posts = Post.objects.all().values('id', 'title', 'content')
+            df = pd.DataFrame(posts)
 
-        if df.empty:
-            self.stdout.write(self.style.WARNING("No posts found. Skipping similarity computation."))
-            return
+            if df.empty:
+                self.stdout.write(self.style.WARNING("⚠ No posts found. Skipping similarity computation."))
+                return
 
-        if df.shape[0] < 3:
-            self.stdout.write(self.style.WARNING("Too few posts (<3) to compute meaningful similarities."))
-            return
+            if df.shape[0] < 3:
+                self.stdout.write(self.style.WARNING("⚠ Too few posts (<3) to compute meaningful similarities."))
+                return
 
-        # Prepare text for TF-IDF
-        df['text'] = df['title'].fillna('') + " " + df['content'].fillna('')
+            df['text'] = df['title'].fillna('') + " " + df['content'].fillna('')
 
-        # Compute TF-IDF + cosine similarity
-        tfidf = TfidfVectorizer(stop_words='english')
-        tfidf_matrix = tfidf.fit_transform(df['text'])
-        cosine_sim = cosine_similarity(tfidf_matrix)
+            tfidf = TfidfVectorizer(stop_words='english')
+            tfidf_matrix = tfidf.fit_transform(df['text'])
+            cosine_sim = cosine_similarity(tfidf_matrix)
 
-        # Build index map
-        index_map = {row['id']: idx for idx, row in df.iterrows()}
+            index_map = {row['id']: idx for idx, row in df.iterrows()}
 
-        # Save results
-        cache_dir = 'recommend/cache'
-        os.makedirs(cache_dir, exist_ok=True)
+            cache_dir = 'recommend/cache'
+            os.makedirs(cache_dir, exist_ok=True)
 
-        with open(os.path.join(cache_dir, 'index_map.pkl'), 'wb') as f:
-            pickle.dump(index_map, f)
+            with open(os.path.join(cache_dir, 'index_map.pkl'), 'wb') as f:
+                pickle.dump(index_map, f)
 
-        with open(os.path.join(cache_dir, 'similarity_matrix.pkl'), 'wb') as f:
-            pickle.dump(cosine_sim, f)
+            with open(os.path.join(cache_dir, 'similarity_matrix.pkl'), 'wb') as f:
+                pickle.dump(cosine_sim, f)
 
-        self.stdout.write(self.style.SUCCESS(f"✓ Precomputed similarity for {df.shape[0]} posts."))
-        self.stdout.write(self.style.SUCCESS("✓ Saved to 'recommend/cache/'."))
+            self.stdout.write(self.style.SUCCESS(f"✓ Precomputed similarity for {df.shape[0]} posts."))
+            self.stdout.write(self.style.SUCCESS("✓ Saved to 'recommend/cache/'."))
+
+        except Exception as e:
+            self.stderr.write(self.style.ERROR(f"❌ Error during similarity precomputation: {e}"))

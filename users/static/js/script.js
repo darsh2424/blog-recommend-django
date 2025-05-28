@@ -1,12 +1,24 @@
 // Common JS
-function toggleDarkMode() {
-    document.body.classList.toggle("dark-mode");
+function toggleLeftSidebar() {
+    const sidebar = document.getElementById("leftSidebar");
+    sidebar.classList.toggle("show");
 }
 
-// Sidebar Toggle
-document.getElementById("sidebarToggle").addEventListener("click", () => {
-    document.getElementById("sidebar").classList.toggle("active");
+function toggleRightSidebar() {
+    const sidebar = document.getElementById("rightSidebar");
+    sidebar.classList.toggle("show");
+}
+
+// Sidebar filter logic
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('filterInput');
+    if (input) {
+        input.addEventListener('keyup', function () {
+            const query = this.value.toLowerCase();
+            document.querySelectorAll('#filterList li').forEach(li => {
+                li.style.display = li.textContent.toLowerCase().includes(query) ? 'block' : 'none';
+            });
+        });
+    }
 });
-document.getElementById("closeSidebar").addEventListener("click", () => {
-    document.getElementById("sidebar").classList.remove("active");
-});
+

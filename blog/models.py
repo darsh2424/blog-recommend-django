@@ -13,6 +13,7 @@ class Post(models.Model):
     content = models.TextField(blank=True, null=True)
     image_url = models.URLField(blank=True, null=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name="posts")
+    views_count = models.IntegerField(default=0)
     like_count = models.IntegerField(default=0)
     comment_count = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)

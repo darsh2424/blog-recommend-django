@@ -2,8 +2,8 @@ import pickle
 from datetime import timedelta
 from django.db.models import F
 from django.utils.timezone import now
-from blog.models import Post, PostInteraction
-from users.models import UserProfile
+from blog.models import Post
+from users.models import UserProfile, PostInteraction
 import pandas as pd
 
 WEIGHTS = {
@@ -38,11 +38,15 @@ def get_cold_start_recommendations(user=None, top_n=5):
 
 
 def load_similarity_matrix():
-    with open('recommend/cache/index_map.pkl', 'rb') as f:
-        index_map = pickle.load(f)
-    with open('recommend/cache/similarity_matrix.pkl', 'rb') as f:
-        sim_matrix = pickle.load(f)
-    return index_map, sim_matrix
+    try:
+        with open('recommend/cache/index_map.pkl', 'rb') as f:
+            index_map = pickle.load(f)
+        with open('recommend/cache/similarity_matrix.pkl', 'rb') as f:
+            sim_matrix = pickle.load(f)
+        return index_map, sim_matrix
+    except FileNotFoundError:
+        return {}, []
+
 
 
 def get_user_recommendations(user, top_n=5):
@@ -99,3 +103,23 @@ def similar_posts_for_post(post_id, top_n=5):
     similar_indices = sim_matrix[idx].argsort()[::-1][1:top_n + 1]
     similar_ids = [list(index_map.keys())[i] for i in similar_indices]
     return Post.objects.filter(id__in=similar_ids)
+
+
+def get_trending_posts_by_score(category=None, days=7, top_n=None):
+    today = now().date()
+    start_date = today - timedelta(days=days)
+
+    queryset = Post.objects.filter(created_at__date__range=(start_date, today))
+    if category:
+        queryset = queryset.filter(category=category)
+
+    post_scores = []
+    for post in queryset:
+        days_old = max((today - post.created_at.date()).days, 1)
+        score = (post.views_count + post.like_count * 2 + post.comment_count * 1.5) / days_old
+        post_scores.append((score, post))
+
+    sorted_posts = sorted(post_scores, key=lambda x: x[0], reverse=True)
+    final_posts = [p[1] for p in sorted_posts]
+
+    return final_posts[:top_n] if top_n else final_posts

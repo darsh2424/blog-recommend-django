@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Your Interests{% endblock %}
+
+{% block content %}
+<div class="container my-5 text-center">
+  <h2 class="mb-2">What are you interested in?</h2>
+  <p class="text-muted mb-4">Choose at least three categories to personalize your experience.</p>
+
+  {% if messages %}
+    {% for message in messages %}
+      <div class="alert alert-warning">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+
+  <form method="POST" class="d-flex flex-column align-items-center">
+    {% csrf_token %}
+    <div class="d-flex flex-wrap justify-content-center gap-2 mb-4" id="interestList">
+      {% for category in categories %}
+        <input type="checkbox" class="btn-check" id="cat{{ category.id }}" name="categories" value="{{ category.id }}"
+               {% if category.id in selected_ids %}checked{% endif %} autocomplete="off">
+        <label class="btn btn-outline-dark interest-label" for="cat{{ category.id }}">
+          {{ category.name|title }}
+        </label>
+      {% endfor %}
+    </div>
+
+    <button type="submit" class="btn btn-success px-4" id="continueBtn" disabled>Continue</button>
+  </form>
+</div>
+
+<style>
+  .interest-label {
+    transition: all 0.3s ease;
+    border-radius: 30px;
+    padding: 8px 20px;
+  }
+
+  .btn-check:checked + .interest-label {
+    background-color: #0d6efd;
+    color: #fff;
+    border-color: #0d6efd;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+  }
+
+  .btn-check + .interest-label:hover {
+    background-color: #f1f1f1;
+  }
+</style>
+
+<script>
+  const checkboxes = document.querySelectorAll('input[name="categories"]');
+  const continueBtn = document.getElementById('continueBtn');
+
+  function updateButtonState() {
+    const selected = Array.from(checkboxes).filter(cb => cb.checked).length;
+    continueBtn.disabled = selected < 3;
+  }
+
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', updateButtonState);
+  });
+
+  updateButtonState(); 
+</script>
+{% endblock %}

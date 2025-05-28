@@ -53,7 +53,7 @@ class UserProfile(models.Model):
     location = models.CharField(max_length=100, blank=True, null=True)
     profile_picture = models.URLField(blank=True, null=True)
     followed_users = models.ManyToManyField("self", blank=True, symmetrical=False)
-    category_preferences = models.JSONField(blank=True, null=True)
+    category_preferences = models.ManyToManyField("blog.Category", blank=True)
     saved_posts = models.ManyToManyField("blog.Post", blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 

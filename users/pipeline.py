@@ -8,11 +8,15 @@ def save_profile(backend, user, response, *args, **kwargs):
         name = response.get('name')
         picture = response.get('picture')
 
-        user.username = ""
-        user.save()
+        # Set username ONLY if it's the user's first login
+        if not user.username:
+            user.username = ""
+            user.save()
+
+        # Save user_id to session for Django-side usage
         kwargs['request'].session['user_id'] = user.id
-        
-        # Save to custom UserProfile
+
+        # Save to custom UserProfile only if not created yet
         profile, created = UserProfile.objects.get_or_create(
             user=user,
             defaults={

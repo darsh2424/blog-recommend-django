@@ -1,15 +1,15 @@
 {% load static %}
+{% load custom_tags %}
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}BlogNest{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <link rel="stylesheet" href="{% static 'css/style.css' %}">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-
   <!-- Flatpickr CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
   <!-- Optional: Bootstrap Theme -->
@@ -17,35 +17,35 @@
 
   <!-- Flatpickr JS -->
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-</head>
 
+</head>
 <body>
 
-  <!-- Navbar -->
-  <nav class="navbar navbar-expand-lg bg-white shadow-sm">
-    <div class="container-fluid d-flex align-items-center">
-      <a class="navbar-brand" href="#">
+  <!-- Top Navbar -->
+  <nav class="navbar navbar-light bg-light fixed-top px-3 shadow-sm">
+    <div class="container-fluid">
+      <!-- Left Sidebar Toggle -->
+      <button class="btn btn-outline-dark d-md-none" onclick="toggleLeftSidebar()">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+
+      <!-- Logo -->
+      <a class="navbar-brand mx-3" href="{% url 'index' %}">
         <img src="https://cdn.worldvectorlogo.com/logos/medium-1.svg" alt="BlogNest Logo" height="30">
       </a>
 
-      <form class="d-none d-md-flex mx-2 flex-grow-1" role="search">
-        <div class="input-group">
-          <span class="input-group-text bg-white border-end-0">
-            <i class="fa-solid fa-magnifying-glass"></i>
-          </span>
-          <input type="search" class="form-control border-start-0" placeholder="Search" aria-label="Search">
-        </div>
-      </form>
-
+      <!-- Auth / Actions -->
       <div class="settings-div d-flex align-items-center gap-3 ms-auto">
-        <div class="toggle-btn btn btn-outline-dark" onclick="toggleDarkMode()">
-          <i id="toggle-icon" class="fas fa-sun"></i>
-        </div>
-
+        
+        <!-- Right Sidebar Toggle -->
+        <button class="btn btn-outline-dark d-md-none" onclick="toggleRightSidebar()">
+          <!-- <i class="fa-solid fa-filter"></i> -->
+          <i class="fa-solid fa-shuffle"></i>
+        </button>
+        
         {% if user.is_authenticated %}
         <div class="login-div d-flex align-items-center gap-2">
           <a href="#" class="btn btn-outline-dark"><i class="fa-solid fa-pen-to-square"></i> Write</a>
-          <a href="#" class="btn btn-outline-dark"><i class="fa-solid fa-user"></i></a>
           <a href="{% url 'logout' %}" class="btn btn-outline-danger">Logout</a>
         </div>
         {% else %}
@@ -54,19 +54,45 @@
         </div>
         {% endif %}
 
-        <button class="btn btn-outline-dark" id="sidebarToggle">
-          <i class="fa-solid fa-bars"></i>
-        </button>
+        
       </div>
     </div>
   </nav>
 
+  <!-- Left Sidebar -->
+  <div class="sidebar-left d-md-block" id="leftSidebar">
+    <a href="{% url 'index' %}"><i class="fa-solid fa-fire"></i> Trending</a>
+    <a href="{% url 'for_you' %}"><i class="fa-solid fa-heart"></i> For You</a>
+    <a href=""><i class="fa-solid fa-user-group"></i> Following</a>
+    <a href=""><i class="fa-solid fa-bookmark"></i> My Library</a>
+  </div>
 
-  <!-- Content Block -->
-  {% block content %}{% endblock %}
+  <!-- Right Sidebar -->
+  <div class="sidebar-right d-md-block" id="rightSidebar">
+    <input type="text" class="form-control mb-3" id="filterInput" placeholder="Search...">
+    <ul id="filterList">
+      {% block sidebar_list %}
+        {% for cat in categories %}
+          <li>
+            <a href="{% url 'trending_category' category_slug=cat.name|slugify %}" style="color: black; text-decoration: none;">
+              {{ cat.name | title }} ({{ cat.posts.count }})
+            </a>
+          </li>
+        {% empty %}
+          <li>No categories available.</li>
+        {% endfor %}
+      {% endblock %}
+    </ul>
+  </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Main Content -->
+  <div class="main-content">
+    {% block content %}
+    <h3>Page content goes here...</h3>
+    {% endblock %}
+  </div>
+
+  <!-- Scripts -->
   <script src="{% static 'js/script.js' %}"></script>
 </body>
-
 </html>
