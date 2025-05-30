@@ -4,10 +4,6 @@ function toggleLeftSidebar() {
     sidebar.classList.toggle("show");
 }
 
-function toggleRightSidebar() {
-    const sidebar = document.getElementById("rightSidebar");
-    sidebar.classList.toggle("show");
-}
 
 // Sidebar filter logic
 document.addEventListener('DOMContentLoaded', function () {

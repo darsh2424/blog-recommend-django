@@ -18,19 +18,22 @@ def get_cold_start_recommendations(user=None, top_n=5):
 
     trending_posts = (
         Post.objects.filter(created_at__gte=recent_time)
-        .annotate(score=F('view_count') + F('like_count') * 2)
+        .annotate(score=F('views_count') + F('like_count') * 2)
         .order_by('-score')[:top_n]
     )
 
     if user:
         try:
             profile = user.profile
-            if profile.category_preferences:
-                category_ids = profile.category_preferences
-                category_posts = Post.objects.filter(category_id__in=category_ids).order_by('-created_at')[:top_n]
-                return list(trending_posts) + list(
-                    category_posts.exclude(id__in=trending_posts.values_list('id', flat=True))
+            if profile.category_preferences.exists():
+                category_ids = profile.category_preferences.all().values_list('id', flat=True)
+                category_posts = (
+                    Post.objects
+                    .filter(category_id__in=category_ids)
+                    .exclude(id__in=trending_posts.values_list('id', flat=True))
+                    .order_by('-created_at')[:top_n]
                 )
+                return list(trending_posts) + list(category_posts)
         except UserProfile.DoesNotExist:
             pass
 

@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}For You{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+  <!-- Horizontal Scrollable Tabs -->
+  <div class="d-flex flex-nowrap gap-2 overflow-auto mb-4">
+    <a href="?tab=for_you" class="btn {% if selected_tab == 'for_you' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+      For You
+    </a>
+    {% for cat in interest_categories %}
+      <a href="?tab={{ cat.name|slugify }}" class="btn {% if selected_tab == cat.name|slugify %}btn-dark{% else %}btn-outline-dark{% endif %}">
+        {{ cat.name|title }}
+      </a>
+    {% endfor %}
+  </div>
+
+  <!-- Blog Cards -->
+  {% if page_obj %}
+    {% for post in page_obj %}
+      {% include 'post_card.html' %}
+    {% endfor %}
+
+    <!-- Pagination -->
+    <nav class="mt-4 d-flex justify-content-end">
+      <ul class="pagination">
+        {% if page_obj.has_previous %}
+          <li class="page-item"><a class="page-link" href="?tab={{ selected_tab }}&page={{ page_obj.previous_page_number }}">Previous</a></li>
+        {% endif %}
+        <li class="page-item active"><span class="page-link">{{ page_obj.number }}</span></li>
+        {% if page_obj.has_next %}
+          <li class="page-item"><a class="page-link" href="?tab={{ selected_tab }}&page={{ page_obj.next_page_number }}">Next</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  {% else %}
+    <p>No posts found for this section.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block sidebar_list %}
+  <div class="text-center mb-3">
+      <a href="{% url 'interest_selection' %}" class="btn btn-sm btn-outline-info text-dark w-100">
+        <i class="fas fa-sliders-h me-1"></i> Edit Preferences
+      </a>
+  </div>
+  {% for cat in interest_categories %}
+    <li class="mb-1">
+      <a href="?tab={{ cat.name|slugify }}" class="d-block text-decoration-none text-dark">
+        {{ cat.name|title }} ({{ cat.posts.count }})
+      </a>
+    </li>
+    {% empty %}
+      <li>No categories available.</li>
+  {% endfor %}
+{% endblock %}

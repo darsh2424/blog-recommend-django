@@ -16,7 +16,7 @@
 
   <form method="POST" class="d-flex flex-column align-items-center">
     {% csrf_token %}
-    <div class="d-flex flex-wrap justify-content-center gap-2 mb-4" id="interestList">
+    <div class="d-flex flex-wrap justify-content-center gap-2 mb-4 w-75" id="interestList">
       {% for category in categories %}
         <input type="checkbox" class="btn-check" id="cat{{ category.id }}" name="categories" value="{{ category.id }}"
                {% if category.id in selected_ids %}checked{% endif %} autocomplete="off">

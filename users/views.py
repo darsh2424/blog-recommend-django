@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from django.db.models import F
 import pycountry
 import os
-
+from django.utils.text import slugify  
 from blog.models import Post, Category, Comment
 from users.models import User, UserProfile
 from recommend.utils import get_user_recommendations, get_trending_posts_by_score
@@ -70,9 +70,11 @@ def index(request):
 
     if user:
         if not user.username:
-            return render(request, 'newUserProfileDtl.html', {'categories': categories})
+            # return render(request, 'newUserProfileDtl.html', {'categories': categories})
+            return redirect('profile_dtl')
         if not all([profile.gender, profile.birth_date, profile.location]):
-            return render(request, 'newUserOtherDtl.html', {'categories': categories})
+            # return render(request, 'newUserOtherDtl.html', {'categories': categories})
+            return redirect('other_dtl')
         if profile.category_preferences.count() < 3:
             return redirect('interest_selection')
 
@@ -94,25 +96,34 @@ def trending_category_view(request, category_slug):
         'categories': categories,
     })
 
+
 def for_you_view(request):
-    posts = get_user_recommendations(request.user, top_n=30)
-    page_obj = paginate(request, posts)
-    return render(request, 'for_you.html', {'page_obj': page_obj})
+    user = request.user
+    profile = getattr(user, 'profile', None)
+    selected_tab = request.GET.get('tab', 'for_you')
 
+    interest_categories = []
+    if profile and profile.category_preferences.exists():
+        interest_categories = list(profile.category_preferences.all().order_by('name'))
 
-def category_view(request, category_slug):
-    category = get_object_or_404(Category, name__iexact=category_slug)
-
-    if request.user.is_authenticated:
-        recommended = get_user_recommendations(request.user, top_n=50)
-        posts = [p for p in recommended if p.category == category]
+    if selected_tab == 'for_you':
+        posts = get_user_recommendations(user, top_n=30)
     else:
-        posts = Post.objects.filter(category=category).order_by('-created_at')
+        category = next(
+            (c for c in interest_categories if slugify(c.name) == selected_tab),
+            None
+        )
+        if category:
+            posts = get_trending_posts_by_score(category=category, days=7)
+        else:
+            posts = []
 
-    page_obj = paginate(request, posts)
-    return render(request, 'blog/category.html', {
-        'category': category,
+    page_obj = paginate(request, posts, per_page=9)
+
+    return render(request, 'for_you.html', {
         'page_obj': page_obj,
+        'selected_tab': selected_tab,
+        'interest_categories': interest_categories,
     })
 
 
@@ -176,13 +187,15 @@ def profile_dtl(request):
 
         return redirect('other_dtl')
 
+    categories = Category.objects.all().order_by('name')
     return render(request, 'newUserProfileDtl.html', {
         'user': user,
         'initial_data': {
             'email': user.email,
             'username': user.username,
             'full_name': profile.full_name,
-            'profile_picture': profile.profile_picture
+            'profile_picture': profile.profile_picture,
+            'categories': categories
         }
     })
 
@@ -199,11 +212,14 @@ def other_dtl(request):
         profile.location = request.POST.get('location')
         profile.save()
         return redirect('interest_selection')
+    
+    categories = Category.objects.all().order_by('name')
 
     return render(request, 'newUserOtherDtl.html', {
         'user': user,
         'profile': profile,
-        'countries': countries
+        'countries': countries,
+        'categories':categories
     })
 
 def interest_selection_view(request):
@@ -221,7 +237,7 @@ def interest_selection_view(request):
             profile.category_preferences.set(selected_ids)
             profile.save()
             return redirect('/')
-
+        
     return render(request, 'interest_selection.html', {
         'user': user,
         'categories': categories,

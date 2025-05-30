@@ -12,7 +12,7 @@ urlpatterns = [
     path('logout/', logout_view, name='logout'),
 
     path('for-you/', views.for_you_view, name='for_you'),
-    path('category/<slug:category_slug>/', views.category_view, name='category_view'),
+    # path('category/<slug:category_slug>/', views.category_view, name='category_view'),
     # path('trending/', views.trending_view, name='trending'),
     # path('trending/<slug:category_slug>/', views.trending_view, name='trending_category'),
 
