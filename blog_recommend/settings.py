@@ -28,7 +28,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 SECRET_KEY = config('SECRET_KEY')
-ALLOWED_HOSTS = ['blognest.onrender.com','127.0.0.1']
+ALLOWED_HOSTS = ['blognest-us0l.onrender.com','127.0.0.1']
 
 # Application definition
 
