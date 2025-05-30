@@ -17,6 +17,10 @@ class Command(BaseCommand):
     help = 'Import Medium blog data into the system with a cap of 200 blog posts.'
 
     def handle(self, *args, **kwargs):
+        if Post.objects.exists():
+            self.stdout.write(self.style.WARNING("⚠️ Posts already exist. Import skipped."))
+            return
+        
         if not DATA_FILE.exists():
             self.stdout.write(self.style.ERROR(f"File not found: {DATA_FILE.resolve()}"))
             return

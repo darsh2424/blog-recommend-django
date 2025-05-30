@@ -98,6 +98,9 @@ def trending_category_view(request, category_slug):
 
 
 def for_you_view(request):
+    if not request.user.is_authenticated:
+        return redirect('/')
+    
     user = request.user
     profile = getattr(user, 'profile', None)
     selected_tab = request.GET.get('tab', 'for_you')
