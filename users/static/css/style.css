@@ -1,7 +1,17 @@
 /* Common CSS Base */
-    body {
-      overflow-x: hidden;
-    }
+body {
+  overflow-x: hidden;
+}
+
+#scrollTopBtn {
+  display: none;
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  z-index: 999;
+  padding: 12px 15px;
+  font-size: 16px;
+}
 
 .sidebar-left {
   width: 230px;
@@ -38,6 +48,46 @@
   margin-left: 230px;
   padding: 90px 20px 20px 20px;
 }
+
+/* Category Navbar (Only on Large Screens) */
+.category-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  padding: 10px;
+  position: relative;
+}
+
+.dark-mode .category-navbar {
+  background-color: #1e1e1e;
+}
+
+.category-wrapper {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  max-width: 600px;
+  position: relative;
+}
+
+.category-container {
+  display: flex;
+  gap: 10px;
+  transition: transform 0.3s ease;
+}
+
+.category-container span {
+  cursor: pointer;
+  padding: 8px 15px;
+  font-size: 14px;
+  background-color: #e0e0e0;
+  border-radius: 20px;
+  color: #333;
+  transition: 0.3s;
+  white-space: nowrap;
+}
+
 
 @media (max-width: 768px) {
   .sidebar-left {

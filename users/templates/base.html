@@ -2,6 +2,7 @@
 {% load custom_tags %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>{% block title %}BlogNest{% endblock %}</title>
@@ -15,7 +16,12 @@
 
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 </head>
+
 <body>
+  
+  <button id="scrollTopBtn" class="btn btn-success rounded-circle shadow" title="Go to top">
+    <i class="fa-solid fa-arrow-up"></i>
+  </button>
 
   <!-- Top Navbar -->
   <nav class="navbar navbar-light bg-light fixed-top px-3 shadow-sm">
@@ -34,7 +40,9 @@
       <div class="settings-div d-flex align-items-center gap-3 ms-auto">
         {% if user.is_authenticated %}
         <div class="login-div d-flex align-items-center gap-2">
-          <a href="#" class="btn btn-outline-dark"><i class="fa-solid fa-pen-to-square"></i> Write</a>
+          <a href="{% url 'write_post' %}" class="btn btn-outline-dark">
+            <i class="fa-solid fa-pen-to-square"></i> Write
+          </a>
           <a href="{% url 'logout' %}" class="btn btn-outline-danger">Logout</a>
         </div>
         {% else %}
@@ -52,8 +60,14 @@
     <div class="sidebar-section mb-4">
       <a href="{% url 'index' %}"><i class="fa-solid fa-fire me-2"></i> Trending</a>
       <a href="{% url 'for_you' %}"><i class="fa-solid fa-heart me-2"></i> For You</a>
-      <a href="#"><i class="fa-solid fa-user-group me-2"></i> Following</a>
-      <a href="#"><i class="fa-solid fa-bookmark me-2"></i> My Library</a>
+      <a href="{% url 'following_posts' %}"><i class="fa-solid fa-user-group me-2"></i> Following</a>
+        {% if user.is_authenticated and user.username %}
+          <a href="{% url 'user_profile' username=user.username %}">
+            <i class="fa-solid fa-bookmark me-2"></i> My Profile
+          </a>
+        {% else %}
+          <a href="#"><i class="fa-solid fa-bookmark me-2"></i> My Profile</a>
+        {% endif %}
     </div>
 
     <!-- Category Filter -->
@@ -62,15 +76,16 @@
       <input type="text" class="form-control mb-2 mx-2" id="filterInput" placeholder="Search categories...">
       <ul id="filterList" class="list-unstyled px-2 overflow-y-scroll" style="max-height: 60vh;">
         {% block sidebar_list %}
-          {% for cat in categories %}
-            <li class="mb-1">
-              <a href="{% url 'trending_category' category_slug=cat.name|slugify %}" class="d-block text-decoration-none text-dark">
-                {{ cat.name|title }} ({{ cat.posts.count }})
-              </a>
-            </li>
-          {% empty %}
-            <li>No categories available.</li>
-          {% endfor %}
+        {% for cat in categories %}
+        <li class="mb-1">
+          <a href="{% url 'trending_category' category_slug=cat.name|slugify %}"
+            class="d-block text-decoration-none text-dark">
+            {{ cat.name|title }} ({{ cat.posts.count }})
+          </a>
+        </li>
+        {% empty %}
+        <li>No categories available.</li>
+        {% endfor %}
         {% endblock %}
       </ul>
     </div>
@@ -84,6 +99,25 @@
   </div>
 
   <!-- Script -->
+   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{% static 'js/script.js' %}"></script>
+  
+  <script>
+    const scrollTopBtn = document.getElementById("scrollTopBtn");
+
+    // Show/hide button
+    window.onscroll = function () {
+      scrollTopBtn.style.display = (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300)
+        ? "block"
+        : "none";
+    };
+
+    // Scroll to top on click
+    scrollTopBtn.onclick = function () {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+  </script>
+
 </body>
+
 </html>

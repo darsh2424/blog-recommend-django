@@ -1,32 +1,48 @@
 {% extends 'base.html' %}
 
+{% load custom_filters %}
+{% load media_tags %}
 {% block title %}{{ post.title }} - BlogNest{% endblock %}
 
 {% block content %}
 <div class="container post-detail-container mt-4">
   <h2>{{ post.title }}</h2>
-  <p class="text-muted">By {{ post.user.profile.full_name|default:post.user.username }}</p>
 
+  <div class="text-muted">
+    <p>By {{ post.user.profile.full_name|default:post.user.username }} <br /> 
+      <span>{{profile_user.profile.followers.count }} Followers</span> <br /> 
+      <a href="{% url 'user_profile' post.user.username %}" class="btn btn-info text-muted mt-2">
+        Check Profile
+      </a>
+      {% if request.user != profile_user %}
+      {% include 'follow_button.html' with profile_user=profile_user is_following=is_following %}
+      {% endif %}
+    </p>
+  </div>
+  {% if post.updated_at %}
+  <p style="font-size: 12px;">Last Updated 📅 {{ post.updated_at|date:"d M Y" }}</p>
+  {% else %}
+  <p style="font-size: 12px;">Last Updated 📅 {{ post.updated_at|date:"d M Y" }}</p>
+  {% endif %}
   {% if post.image_url %}
-    <img src="{{ post.image_url|default:'https://via.placeholder.com/250x200?text=No+Image' }}"
-     alt="Blog image"
-     class="post-detail-img img-fluid"
-     loading="lazy">
+  <img src="{{ post.image_url|resolve_media_url|default:'https://via.placeholder.com/250x200?text=No+Image' }}"
+    alt="Blog image" class="post-detail-img img-fluid" loading="lazy">
   {% endif %}
 
-  <p class="post-content">{{ post.content }}</p>
+
+  <p class="post-content">{{ post.content|safe }}</p>
 
   <hr>
 
   <div class="comment-container">
     <h5>Comments ({{ post.comment_count }})</h5>
     {% for comment in comments %}
-      <div class="mb-3">
-        <strong>{{ comment.user.username }}</strong>
-        <p>{{ comment.text }}</p>
-      </div>
+    <div class="mb-3">
+      <strong>{{ comment.user.username }}</strong>
+      <p>{{ comment.text }}</p>
+    </div>
     {% empty %}
-      <p>No comments yet.</p>
+    <p>No comments yet.</p>
     {% endfor %}
   </div>
 </div>

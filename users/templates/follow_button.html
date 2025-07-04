@@ -1,0 +1,74 @@
+{% load static %}
+<button class="follow-btn {% if is_following %}following{% endif %}" 
+        data-username="{{ profile_user.username }}"
+        data-follow-url="{% url 'follow_user' profile_user.username %}"
+        data-csrf="{{ csrf_token }}">
+    {% if is_following %}
+        <i class="fas fa-user-minus"></i> Unfollow
+    {% else %}
+        <i class="fas fa-user-plus"></i> Follow
+    {% endif %}
+</button>
+
+<style>
+.follow-btn {
+    background: #0066ff;
+    color: white;
+    border: none;
+    padding: 7px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 15px;
+    transition: all 0.3s ease;
+}
+
+.follow-btn.following {
+    background: #dc3545;
+}
+
+.follow-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.follow-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const username = this.dataset.username;
+            const url = this.dataset.followUrl;
+            const csrf = this.dataset.csrf;
+            const isFollowing = this.classList.contains('following');
+            const action = isFollowing ? 'unfollow' : 'follow';
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrf,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: `action=${action}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    this.classList.toggle('following');
+                    if (data.followed) {
+                        this.innerHTML = '<i class="fas fa-user-minus"></i> Unfollow';
+                    } else {
+                        this.innerHTML = '<i class="fas fa-user-plus"></i> Follow';
+                    }
+                    // Update follower count if needed
+                    const followerCountEl = document.querySelector('.follower-count');
+                    if (followerCountEl && data.follower_count !== undefined) {
+                        followerCountEl.textContent = data.follower_count;
+                    }
+                }
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    });
+});
+</script>

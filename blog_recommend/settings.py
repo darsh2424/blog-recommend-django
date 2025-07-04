@@ -26,9 +26,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # SECURITY WARNING: keep the secret key used in production secret!
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = True
 SECRET_KEY = config('SECRET_KEY')
-ALLOWED_HOSTS = ['blognest-us0l.onrender.com','127.0.0.1']
+ALLOWED_HOSTS = ['blognest-us0l.onrender.com','127.0.0.1', 'localhost']
 
 # Application definition
 
@@ -81,19 +81,19 @@ WSGI_APPLICATION = 'blog_recommend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-#     }
-# }
-
 DATABASES = {
-    'default': dj_database_url.parse(
-        url='postgresql://blognest_django_render_user:bfP0z37gNj8fbKff1yr76rO9AHqHM4cM@dpg-d0sv6f2dbo4c73fgesng-a.oregon-postgres.render.com/blognest_django_render',
-        conn_max_age=600
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
 }
+
+# DATABASES = {
+#     'default': dj_database_url.parse(
+#         url='postgresql://blognest_django_render_user:bfP0z37gNj8fbKff1yr76rO9AHqHM4cM@dpg-d0sv6f2dbo4c73fgesng-a.oregon-postgres.render.com/blognest_django_render',
+#         conn_max_age=600
+#     )
+# }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -150,6 +150,7 @@ AUTHENTICATION_BACKENDS = [
 
 SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = config('SOCIAL_AUTH_GOOGLE_OAUTH2_KEY')
 SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = config('SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET')
+OPENROUTER_API_KEY_SECRET = config('OPENROUTER_API_KEY', default='')
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -160,6 +161,7 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.social_details',
     'social_core.pipeline.social_auth.social_uid',
     'social_core.pipeline.social_auth.auth_allowed',
+    'social_core.pipeline.social_auth.associate_by_email',
     'social_core.pipeline.social_auth.social_user',
     'social_core.pipeline.user.get_username',
     'social_core.pipeline.user.create_user',
@@ -168,5 +170,5 @@ SOCIAL_AUTH_PIPELINE = (
     'social_core.pipeline.social_auth.load_extra_data',
 )
 
-MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+# MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
+# STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"

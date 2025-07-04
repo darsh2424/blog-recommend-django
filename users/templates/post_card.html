@@ -1,17 +1,20 @@
+{% load media_tags %}
 <a href="{% url 'post_detail' post.id %}" class="text-decoration-none text-dark">
   <div class="post mb-3 shadow-sm rounded overflow-hidden hover-effect d-flex flex-column flex-md-row">
-    
+
     <!-- Blog Image -->
-    <img src="{{ post.image_url|default:'https://via.placeholder.com/250x200?text=No+Image' }}"
-     alt="Blog image"
-     class="post-img img-fluid"
-     loading="lazy">
+    <img src="{{ post.image_url|resolve_media_url|default:'https://via.placeholder.com/250x200?text=No+Image' }}"
+      alt="Blog image" class="post-img img-fluid" loading="lazy">
 
     <!-- Content -->
     <div class="post-content p-3">
       <h5 class="mb-1">{{ post.title }}</h5>
-      <small class="text-muted">by {{ post.user.profile.full_name|default:post.user.username|default:post.user.email }}</small>
-
+      <small class="text-muted">by {{ post.user.profile.full_name|default:post.user.username|default:post.user.email}}</small>
+        {% if post.updated_at is not null %}
+        <p style="font-size: 12px;">Last Updated 📅 {{ post.updated_at|date:"d M Y" }}</p>
+        {% else %}
+        <p style="font-size: 12px;">Last Updated 📅 {{ post.updated_at|date:"d M Y" }}</p>
+        {% endif %}
       <p class="mt-2 text-muted">{{ post.content|truncatewords:25 }}</p>
 
       <div class="stats d-flex flex-wrap gap-3 mt-2">

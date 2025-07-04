@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load custom_filters %}
+{% load media_tags %}
+{% block title %}@{{ profile_user.username }} | Blog Profile{% endblock %}
+{% block content %}
+<style>
+    .stats {
+        display: flex;
+        gap: 1.5rem;
+        font-size: 14px;
+        color: #333;
+        margin-top: 8px;
+    }
+
+    .follow-btn {
+        background: #0066ff;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-top: 20px;
+    }
+
+    .blog-post {
+        position: relative;
+        /* Added this */
+    }
+
+    .edit-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1;
+        opacity: 0.7;
+        transition: opacity 0.2s;
+    }
+
+    .edit-btn:hover {
+        opacity: 1;
+    }
+</style>
+<div class="container my-5">
+    <!-- User Profile Card -->
+    <div class="bg-white shadow-sm rounded p-4 d-flex align-items-center justify-content-between flex-wrap">
+        <div class="d-flex align-items-center gap-4">
+            <!-- Profile -->
+            <div class="profile">
+                <img src="{{ profile_picture|resolve_media_url }}" alt="User Avatar" />
+                <div class="profile-details">
+                    <h2>@{{ profile_user.username }}</h2>
+                    <div class="stats">
+                        <div>📚 {{ total_blogs }} Blogs</div>
+                        <div>👥 <span class="follower-count">{{ profile_user.profile.followers.count }}</span> Followers</div>
+                        <div>❤ {{ total_likes }} Likes</div>
+                    </div>
+                </div>
+                {% if request.user != profile_user %}
+                    {% include 'follow_button.html' with profile_user=profile_user is_following=is_following %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Blog List -->
+    <div class="mt-5">
+        {% if page_obj %}
+        {% for post in page_obj %}
+        <div class="blog-post bg-white shadow-sm rounded p-3 mb-3">
+            {% if request.user == post.user %}
+            <div class="position-absolute top-0 end-0 mt-2 me-2">
+                <a href="{% url 'edit_post' post.id %}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-edit"></i>
+                </a>
+            </div>
+            {% endif %}
+            <a href="{% url 'post_detail' post.id %}"
+                class="text-decoration-none text-dark d-flex flex-column flex-md-row gap-3">
+                {% if post.image_url %}
+                <img src="{{ post.image_url|resolve_media_url|default:'https://via.placeholder.com/250x200?text=No+Image' }}"
+                    alt="Blog thumbnail" style="width: 120px; height: 100px; object-fit: cover;" />
+                {% else %}
+                <img src="https://via.placeholder.com/120x100?text=No+Image" alt="No image" class="rounded"
+                    style="width: 120px; height: 100px; object-fit: cover;" />
+                {% endif %}
+                <div class="flex-grow-1">
+                    <h6 class="mb-1">{{ post.title }}</h6>
+                    {% if post.updated_at is not null %}
+                            <p style="font-size: 12px;">Edited On {{ post.updated_at|date:"d M Y" }}</p>
+                    {% endif %}
+                    <p class="text-muted small mb-2">{{ post.content|clean_text|truncatewords:25 }}</p>
+                    <div class="d-flex justify-content-between text-muted small">
+                        <div>
+                            <span>📅 {{ post.created_at|date:"d M Y" }}</span>
+                        </div>
+
+                        <div>
+                            ❤️ {{ post.like_count }} &nbsp;
+                            💬 {{ post.comment_count }} &nbsp;
+                            👁 {{ post.views_count }}
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-muted mt-4">This user hasn't posted any blogs yet.</p>
+        {% endif %}
+    </div>
+    <!-- Pagination -->
+    <nav class="mt-4 d-flex justify-content-end">
+      <ul class="pagination">
+        {% if page_obj.has_previous %}
+          <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a></li>
+        {% endif %}
+
+        <li class="page-item active">
+          <span class="page-link">{{ page_obj.number }}</span>
+        </li>
+
+        {% if page_obj.has_next %}
+          <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
+        {% endif %}
+      </ul>
+      </nav>
+</div>
+{% endblock %}

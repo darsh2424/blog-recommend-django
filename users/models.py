@@ -59,6 +59,44 @@ class UserProfile(models.Model):
 
     def __str__(self):
         return f"Profile of {self.user.username or self.user.email}"
+    
+    def follow_user(self, user_profile):
+        """Follow another user"""
+        if user_profile not in self.followed_users.all():
+            self.followed_users.add(user_profile)
+            return True
+        return False
+    
+    def unfollow_user(self, user_profile):
+        """Unfollow another user"""
+        if user_profile in self.followed_users.all():
+            self.followed_users.remove(user_profile)
+            return True
+        return False
+    
+    def is_following(self, user_profile):
+        """Check if current user is following another user"""
+        return self.followed_users.filter(pk=user_profile.pk).exists()
+    
+    @property
+    def followers_count(self):
+        return UserProfile.objects.filter(followed_users=self).count()
+    
+    @property
+    def followers(self):
+        return UserProfile.objects.filter(followed_users=self)
+    
+    @property
+    def following_count(self):
+        return self.followed_users.count()
+    
+    @property
+    def following_posts(self):
+        """Get all posts from users I'm following"""
+        from blog.models import Post  # Avoid circular imports
+        return Post.objects.filter(
+            user__profile__in=self.followed_users.all()
+        ).order_by('-created_at')
 
 class PostInteraction(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -69,9 +107,28 @@ class PostInteraction(models.Model):
     timestamp = models.DateTimeField(auto_now=True)
 
 class UserPostActivity(models.Model):
-    ACTIONS = [('A', 'Added'), ('D', 'Deleted'), ('E', 'Edited')]
+    ACTION_CHOICES = [
+        ('A', 'Added'),
+        ('D', 'Deleted'), 
+        ('E', 'Edited'),
+        ('U', 'Updated'),
+    ]
+    
+    REASON_CHOICES = [
+        ('typo', 'Fixed typos'),
+        ('info', 'Added more information'),
+        ('image', 'Updated image'),
+        ('structure', 'Improved structure'),
+        ('other', 'Other (please specify)'),
+    ]
+    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="post_activities")
-    post = models.ForeignKey("blog.Post", on_delete=models.CASCADE, related_name="post_activities")
-    action_performed = models.CharField(max_length=255)
-    action_status = models.CharField(max_length=1, choices=ACTIONS)
+    post = models.ForeignKey("blog.Post", on_delete=models.CASCADE, related_name="activities")
+    action = models.CharField(max_length=1, choices=ACTION_CHOICES, default='A')
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES, null=True)
+    details = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "User Post Activities"
+

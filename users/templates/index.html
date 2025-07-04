@@ -3,12 +3,25 @@
 {% block title %}Trending Blogs{% endblock %}
 
 {% block content %}
+
+<div class="category-navbar my-3">
+  <button class="scroll-btn btn btn-light" id="scrollLeft"><i class="fa-solid fa-angle-left"></i></button>
+  <div class="category-wrapper">
+    <div class="category-container" id="categoryContainer">
+      {% for category, _ in category_post_map %}
+        <span onclick="scrollToCategory('{{ category.name|slugify }}')">{{ category.name|title }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  <button class="scroll-btn btn btn-light" id="scrollRight"><i class="fa-solid fa-angle-right"></i></button>
+</div>
+
 <div class="container-fluid">
   <h4 class="mb-4">Weekly Trending</h4>
 
   {% if category_post_map %}
     {% for category, posts in category_post_map %}
-      <h5 class="mt-4">{{ category.name|title }}</h5>
+      <h5 class="mt-5" id="{{ category.name|slugify }}">{{ category.name|title }}</h5>
       <div class="row">
         {% for post in posts %}
           <div class="col-md-12 mb-3">
@@ -28,6 +41,39 @@
     <p>No trending categories/posts available.</p>
   {% endif %}
 </div>
+
+<script>
+  const categoryContainer = document.getElementById("categoryContainer");
+  const scrollLeft = document.getElementById("scrollLeft");
+  const scrollRight = document.getElementById("scrollRight");
+
+  let scrollIndex = 0;
+  const visibleCategories = 5;
+
+  function updateScroll() {
+    const maxScroll = categoryContainer.children.length - visibleCategories;
+    scrollIndex = Math.min(Math.max(scrollIndex, 0), maxScroll);
+    categoryContainer.style.transform = `translateX(${-scrollIndex * 90}px)`;
+    scrollLeft.disabled = scrollIndex === 0;
+    scrollRight.disabled = scrollIndex === maxScroll;
+  }
+
+  scrollLeft.onclick = () => { scrollIndex--; updateScroll(); };
+  scrollRight.onclick = () => { scrollIndex++; updateScroll(); };
+
+  // Scroll to section
+  function scrollToCategory(slug) {
+    const element = document.getElementById(slug);
+    if (element) {
+      window.scrollTo({
+        top: element.offsetTop - 100,
+        behavior: 'smooth'
+      });
+    }
+  }
+
+  window.onload = updateScroll;
+</script>
 {% endblock %}
 
 
