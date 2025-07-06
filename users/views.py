@@ -6,14 +6,14 @@ from django.utils.timezone import now
 from django.core.cache import cache
 from django.contrib import messages
 from datetime import datetime, timedelta
-from django.db.models import F,Sum,Q
+from django.db.models import F,Sum,Q,Count
 import pycountry
 import os
 from pathlib import Path
 import requests
 from django.utils.text import slugify  
 from blog.models import Post, Category, Comment
-from users.models import User, UserProfile, UserPostActivity
+from users.models import User, UserProfile, UserPostActivity, PostInteraction
 from recommend.utils import get_user_recommendations, get_trending_posts_by_score
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
@@ -46,21 +46,36 @@ def index(request):
     if not category_post_map:
         today = now().date()
         week_ago = today - timedelta(days=7)
-        recent_posts = Post.objects.filter(created_at__date__range=(week_ago, today))
+        
+        # Get posts with annotated interaction counts
+        recent_posts = Post.objects.filter(
+            created_at__date__range=(week_ago, today)
+        ).annotate(
+            ann_view_count=Count('interactions', filter=Q(interactions__viewed=True)),
+            ann_like_count=Count('interactions', filter=Q(interactions__liked=True)),
+            ann_comment_count=Count('comments')
+        )
 
-        category_scores, category_posts = {}, {}
+
+        category_scores = {}
+        category_posts = {}
 
         for post in recent_posts:
             days_old = max((today - post.created_at.date()).days, 1)
-            score = post.views_count / days_old
+            # Calculate score using the annotated counts
+            score = (post.ann_view_count + post.ann_like_count * 2 + post.ann_comment_count * 1.5) / days_old
             cid = post.category_id
 
             category_scores.setdefault(cid, []).append(score)
             category_posts.setdefault(cid, []).append((score, post))
 
+        # Get all categories in one query
+        categories = Category.objects.in_bulk(category_scores.keys())
+
         category_avg = [
-            (sum(scores) / len(scores), Category.objects.get(id=cid))
+            (sum(scores) / len(scores), categories[cid])
             for cid, scores in category_scores.items()
+            if scores  # Ensure we don't divide by zero
         ]
 
         sorted_categories = sorted(category_avg, key=lambda x: x[0], reverse=True)
@@ -72,15 +87,14 @@ def index(request):
 
         cache.set('trending_category_map', category_post_map, timeout=10800)
 
+    # Handle user session and profile checks
     user, profile = get_user_and_profile(request.session)
     categories = Category.objects.all().order_by('name')
 
     if user:
         if not user.username:
-            # return render(request, 'newUserProfileDtl.html', {'categories': categories})
             return redirect('profile_dtl')
         if not all([profile.gender, profile.birth_date, profile.location]):
-            # return render(request, 'newUserOtherDtl.html', {'categories': categories})
             return redirect('other_dtl')
         if profile.category_preferences.count() < 3:
             return redirect('interest_selection')
@@ -91,8 +105,11 @@ def index(request):
         'user': user if user else None
     })
 
+
 def trending_category_view(request, category_slug):
     category = get_object_or_404(Category, name__iexact=category_slug.replace('-', ' '))
+    
+    # Updated to use the utility function with annotations
     posts = get_trending_posts_by_score(category=category, days=7)
     page_obj = paginate(request, posts, per_page=9)
     categories = Category.objects.all().order_by('name')
@@ -116,6 +133,7 @@ def for_you_view(request):
         interest_categories = list(profile.category_preferences.all().order_by('name'))
 
     if selected_tab == 'for_you':
+        # This already uses the updated recommendation system
         posts = get_user_recommendations(user, top_n=30)
     else:
         category = next(
@@ -134,6 +152,7 @@ def for_you_view(request):
         'selected_tab': selected_tab,
         'interest_categories': interest_categories,
     })
+
 
 @login_required
 def following_posts(request):
@@ -199,7 +218,7 @@ def user_profile_view(request, username):
 
     # Dynamic stats
     total_blogs = posts.count()
-    total_likes = posts.aggregate(Sum('like_count'))['like_count__sum'] or 0
+    total_likes = PostInteraction.objects.filter(post__in=posts, liked=True).count()
 
     # Fallback avatar (letter-based)
     profile_picture = user.profile.profile_picture
@@ -234,6 +253,15 @@ def post_detail_view(request, post_id):
     comments = Comment.objects.filter(post=post).order_by('-created_at')
 
     profile_user = get_object_or_404(User, username=post.user.username)
+
+     # Record the view
+    if request.user.is_authenticated:
+        interaction, created = PostInteraction.objects.get_or_create(user=request.user, post=post)
+        if not interaction.viewed:
+            interaction.viewed = True
+            interaction.save()
+
+
     is_following = False
     
     if request.user.is_authenticated and request.user != post.user:
@@ -517,7 +545,7 @@ def write_post_view(request):
 @login_required
 def edit_post_view(request, post_id):
     post = get_object_or_404(Post, id=post_id, user=request.user)
-    categories = Category.objects.all()
+    categories = Category.objects.all().order_by('name')
     
     if request.method == 'POST':
         title = request.POST.get('title', '').strip()
@@ -701,3 +729,54 @@ def delete_post_view(request, post_id):
     except Exception as e:
         messages.error(request, f"Error deleting post: {str(e)}")
         return redirect('post_detail', post_id=post.id)
+    
+@require_POST
+@login_required
+def toggle_like(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    interaction, created = PostInteraction.objects.get_or_create(user=request.user, post=post)
+    
+    interaction.liked = not interaction.liked
+    interaction.save()
+
+    return JsonResponse({
+        'status': 'liked' if interaction.liked else 'unliked',
+        'like_count': post.like_count
+    })
+
+@require_POST
+@login_required
+def toggle_save(request, post_id):
+    post = get_object_or_404(Post, id=post_id)
+    profile = request.user.profile
+
+    if post in profile.saved_posts.all():
+        profile.saved_posts.remove(post)
+        status = "unsaved"
+    else:
+        profile.saved_posts.add(post)
+        status = "saved"
+
+    return JsonResponse({"status": status})
+
+@login_required
+def saved_posts_view(request):
+    posts = request.user.profile.saved_posts.order_by('-created_at')
+    categories = Category.objects.all().order_by('name')
+
+    return render(request, 'user_saved_posts.html', {
+        'posts': posts,
+        'categories': categories,
+    })
+
+@login_required
+def liked_posts_view(request):
+    interactions = PostInteraction.objects.filter(user=request.user, liked=True).select_related('post').order_by('-timestamp')
+    liked_posts = [interaction.post for interaction in interactions]
+
+    categories = Category.objects.all().order_by('name')
+
+    return render(request, 'user_liked_posts.html', {
+        'posts': liked_posts,
+        'categories': categories,
+    })

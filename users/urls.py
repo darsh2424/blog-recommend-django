@@ -24,4 +24,8 @@ urlpatterns = [
     path('post/<int:post_id>/delete/', views.delete_post_view, name='delete_post'),
 
     path('write/', views.write_post_view, name='write_post'),
+    path('post/<int:post_id>/like/', views.toggle_like, name='toggle_like'),
+    path('post/<int:post_id>/save/', views.toggle_save, name='toggle_save'),
+    path('saved-posts/', views.saved_posts_view, name='saved_posts'),
+    path('liked-posts/', views.liked_posts_view, name='liked_posts'),
 ]

@@ -99,12 +99,15 @@ class UserProfile(models.Model):
         ).order_by('-created_at')
 
 class PostInteraction(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    post = models.ForeignKey("blog.Post", on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="interactions")
+    post = models.ForeignKey("blog.Post", on_delete=models.CASCADE, related_name="interactions")
     liked = models.BooleanField(default=False)
     viewed = models.BooleanField(default=False)
-    saved = models.BooleanField(default=False)
+    saved = models.BooleanField(default=False)  
     timestamp = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('user', 'post')  
 
 class UserPostActivity(models.Model):
     ACTION_CHOICES = [

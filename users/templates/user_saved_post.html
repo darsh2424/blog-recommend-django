@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Liked Blogs{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <h3 class="mb-4"> Saved Blogs</h3>
+
+  {% if posts %}
+    <div class="row">
+      {% for post in posts %}
+        <div class="col-md-12 mb-3">
+          {% include 'post_card.html' with post=post %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>You haven’t Saved any blogs yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

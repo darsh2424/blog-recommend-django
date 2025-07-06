@@ -10,11 +10,13 @@
     <div class="post-content p-3">
       <h5 class="mb-1">{{ post.title }}</h5>
       <small class="text-muted">by {{ post.user.profile.full_name|default:post.user.username|default:post.user.email}}</small>
-        {% if post.updated_at is not null %}
+      
+      {% if post.updated_at %}
         <p style="font-size: 12px;">Last Updated 📅 {{ post.updated_at|date:"d M Y" }}</p>
-        {% else %}
-        <p style="font-size: 12px;">Last Updated 📅 {{ post.updated_at|date:"d M Y" }}</p>
-        {% endif %}
+      {% else %}
+        <p style="font-size: 12px;">Created 📅 {{ post.created_at|date:"d M Y" }}</p>
+      {% endif %}
+      
       <p class="mt-2 text-muted">{{ post.content|truncatewords:25 }}</p>
 
       <div class="stats d-flex flex-wrap gap-3 mt-2">

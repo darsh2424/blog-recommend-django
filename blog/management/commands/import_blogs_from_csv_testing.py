@@ -5,9 +5,10 @@ from pathlib import Path
 import pandas as pd
 from django.core.management.base import BaseCommand
 from django.utils.timezone import now
+from django.db.models import Count, Q
 
 from blog.models import Category, Post
-from users.models import User, UserProfile
+from users.models import User, UserProfile, PostInteraction
 
 BASE_DIR = Path(__file__).resolve().parent  
 DATA_FILE = BASE_DIR / "Medium_Blog_Data.csv"
@@ -63,20 +64,21 @@ class Command(BaseCommand):
                 title = row['blog_title'][:255]
                 content = row['blog_content']
                 image_url = row.get('blog_img', None)
-
                 user = random.choice(user_map[topic])
+                random_date = now() - timedelta(days=random.randint(0, 365))
 
-                Post.objects.create(
+                # Create the post without counters
+                post = Post.objects.create(
                     user=user,
                     title=title,
                     content=content,
                     image_url=image_url if pd.notnull(image_url) else None,
                     category=category,
-                    views_count=0,
-                    like_count=0,
-                    comment_count=0,
-                    created_at=now() - timedelta(days=random.randint(0, 365))
+                    created_at=random_date
                 )
+
+                # Simulate some interactions
+                self._create_interactions(post, user_map)
                 total_created += 1
 
                 if total_created >= MAX_BLOGS:
@@ -86,3 +88,30 @@ class Command(BaseCommand):
                 break
 
         self.stdout.write(self.style.SUCCESS(f"Successfully imported {total_created} blog posts."))
+
+    def _create_interactions(self, post, user_map):
+        """Create simulated interactions for the new post"""
+        # Get all users except the post author
+        all_users = []
+        for users in user_map.values():
+            all_users.extend(users)
+        other_users = [u for u in all_users if u != post.user]
+        
+        # Randomly select some users to view the post
+        viewers = random.sample(other_users, min(10, len(other_users)))
+        for user in viewers:
+            PostInteraction.objects.create(
+                user=user,
+                post=post,
+                viewed=True,
+                timestamp=post.created_at + timedelta(minutes=random.randint(1, 1440))
+            )
+        
+        # Randomly select some users to like the post (subset of viewers)
+        likers = random.sample(viewers, min(5, len(viewers)))
+        for user in likers:
+            PostInteraction.objects.update_or_create(
+                user=user,
+                post=post,
+                defaults={'liked': True}
+            )

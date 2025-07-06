@@ -25,7 +25,6 @@
 
     .blog-post {
         position: relative;
-        /* Added this */
     }
 
     .edit-btn {
@@ -47,17 +46,26 @@
         <div class="d-flex align-items-center gap-4">
             <!-- Profile -->
             <div class="profile">
-                <img src="{{ profile_picture|resolve_media_url }}" alt="User Avatar" />
+                <img src="{{ profile_picture|resolve_media_url }}" alt="User Avatar" class="rounded-circle" width="100" height="100">
                 <div class="profile-details">
                     <h2>@{{ profile_user.username }}</h2>
                     <div class="stats">
-                        <div>📚 {{ total_blogs }} Blogs</div>
+                        <div>📚 {{ profile_user.posts.count }} Blogs</div>
                         <div>👥 <span class="follower-count">{{ profile_user.profile.followers.count }}</span> Followers</div>
-                        <div>❤ {{ total_likes }} Likes</div>
+                        <div>❤ {{ profile_user.profile.total_likes }} Likes</div>
                     </div>
                 </div>
                 {% if request.user != profile_user %}
                     {% include 'follow_button.html' with profile_user=profile_user is_following=is_following %}
+                {% endif %}
+
+                {% if request.user == profile_user %}
+                    <a href="{% url 'liked_posts' %}" class="btn btn-light mt-2">
+                        <i class="fa-solid fa-heart text-danger me-2"></i> Liked Blogs
+                    </a>
+                    <a href="{% url 'liked_posts' %}" class="btn btn-light mt-2">
+                        <i class="fa-solid fa-save text-danger me-2"></i> Saved Blogs
+                    </a>
                 {% endif %}
             </div>
         </div>
@@ -86,19 +94,18 @@
                 {% endif %}
                 <div class="flex-grow-1">
                     <h6 class="mb-1">{{ post.title }}</h6>
-                    {% if post.updated_at is not null %}
-                            <p style="font-size: 12px;">Edited On {{ post.updated_at|date:"d M Y" }}</p>
+                    {% if post.updated_at %}
+                        <p style="font-size: 12px;">Edited On {{ post.updated_at|date:"d M Y" }}</p>
                     {% endif %}
                     <p class="text-muted small mb-2">{{ post.content|clean_text|truncatewords:25 }}</p>
                     <div class="d-flex justify-content-between text-muted small">
                         <div>
                             <span>📅 {{ post.created_at|date:"d M Y" }}</span>
                         </div>
-
                         <div>
-                            ❤️ {{ post.like_count }} &nbsp;
+                            ❤️ {{ post.views_count }} &nbsp;
                             💬 {{ post.comment_count }} &nbsp;
-                            👁 {{ post.views_count }}
+                            👁 {{ post.like_count }}
                         </div>
                     </div>
                 </div>
@@ -109,6 +116,7 @@
         <p class="text-muted mt-4">This user hasn't posted any blogs yet.</p>
         {% endif %}
     </div>
+    
     <!-- Pagination -->
     <nav class="mt-4 d-flex justify-content-end">
       <ul class="pagination">
@@ -124,6 +132,6 @@
           <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>
         {% endif %}
       </ul>
-      </nav>
+    </nav>
 </div>
 {% endblock %}

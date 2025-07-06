@@ -1,7 +1,8 @@
 import pickle
 from datetime import timedelta
-from django.db.models import F
+from django.db import models  # Added this import
 from django.utils.timezone import now
+from django.db.models import Count, Q
 from blog.models import Post
 from users.models import UserProfile, PostInteraction
 import pandas as pd
@@ -15,18 +16,21 @@ WEIGHTS = {
 
 def get_cold_start_recommendations(user=None, top_n=5):
     recent_time = now() - timedelta(days=3)
-
-    trending_posts = (
-        Post.objects.filter(created_at__gte=recent_time)
-        .annotate(score=F('views_count') + F('like_count') * 2)
-        .order_by('-score')[:top_n]
-    )
+    
+    trending_posts = Post.objects.filter(
+        created_at__gte=recent_time
+    ).annotate(
+        annotated_views_count=Count('interactions', filter=Q(interactions__viewed=True)),
+        annotated_likes_count=Count('interactions', filter=Q(interactions__liked=True)),
+        score=Count('interactions', filter=Q(interactions__viewed=True)) + 
+              Count('interactions', filter=Q(interactions__liked=True)) * 2
+    ).order_by('-score')[:top_n]
 
     if user:
         try:
             profile = user.profile
             if profile.category_preferences.exists():
-                category_ids = profile.category_preferences.all().values_list('id', flat=True)
+                category_ids = profile.category_preferences.values_list('id', flat=True)
                 category_posts = (
                     Post.objects
                     .filter(category_id__in=category_ids)
@@ -39,7 +43,6 @@ def get_cold_start_recommendations(user=None, top_n=5):
 
     return trending_posts
 
-
 def load_similarity_matrix():
     try:
         with open('recommend/cache/index_map.pkl', 'rb') as f:
@@ -49,8 +52,6 @@ def load_similarity_matrix():
         return index_map, sim_matrix
     except FileNotFoundError:
         return {}, []
-
-
 
 def get_user_recommendations(user, top_n=5):
     index_map, sim_matrix = load_similarity_matrix()
@@ -82,7 +83,7 @@ def get_user_recommendations(user, top_n=5):
         for idx, score in enumerate(similarity_scores):
             target_post_id = list(index_map.keys())[list(index_map.values()).index(idx)]
             if target_post_id == interaction.post.id:
-                continue  # skip self
+                continue
 
             post_category = post_df.loc[target_post_id]['category_id']
             boost = WEIGHTS['same_category_boost'] if post_category in user_categories else 1
@@ -95,7 +96,6 @@ def get_user_recommendations(user, top_n=5):
     top_ids = sorted(weighted_scores, key=weighted_scores.get, reverse=True)[:top_n]
     return Post.objects.filter(id__in=top_ids)
 
-
 def similar_posts_for_post(post_id, top_n=5):
     index_map, sim_matrix = load_similarity_matrix()
     try:
@@ -106,7 +106,6 @@ def similar_posts_for_post(post_id, top_n=5):
     similar_indices = sim_matrix[idx].argsort()[::-1][1:top_n + 1]
     similar_ids = [list(index_map.keys())[i] for i in similar_indices]
     return Post.objects.filter(id__in=similar_ids)
-
 
 def get_trending_posts_by_score(category=None, days=7, top_n=None):
     today = now().date()
@@ -119,7 +118,7 @@ def get_trending_posts_by_score(category=None, days=7, top_n=None):
     post_scores = []
     for post in queryset:
         days_old = max((today - post.created_at.date()).days, 1)
-        score = (post.views_count + post.like_count * 2 + post.comment_count * 1.5) / days_old
+        score = (post.views_count + post.like_count * 2 + post.comment_count * 1.5 ) / days_old
         post_scores.append((score, post))
 
     sorted_posts = sorted(post_scores, key=lambda x: x[0], reverse=True)
