@@ -26,6 +26,13 @@ urlpatterns = [
     path('write/', views.write_post_view, name='write_post'),
     path('post/<int:post_id>/like/', views.toggle_like, name='toggle_like'),
     path('post/<int:post_id>/save/', views.toggle_save, name='toggle_save'),
+    path('post/<int:post_id>/comment/', views.add_comment, name='add_comment'),
+    path('comment/<int:comment_id>/reply/', views.add_reply, name='add_reply'),
+    path('comment/<int:comment_id>/inline-edit/', views.inline_edit_comment, name='inline_edit_comment'),
+    path('comment/<int:comment_id>/delete/', views.delete_comment, name='delete_comment'),
+    path('reply/<int:reply_id>/inline-edit/', views.inline_edit_reply, name='inline_edit_reply'),
+    path('reply/<int:reply_id>/delete/', views.delete_reply, name='delete_reply'),
+
     path('saved-posts/', views.saved_posts_view, name='saved_posts'),
     path('liked-posts/', views.liked_posts_view, name='liked_posts'),
 ]

@@ -2,8 +2,8 @@
 {% block title %}Liked Blogs{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-  <h3 class="mb-4"> Saved Blogs</h3>
+<div class="mt-4">
+  <h3 class="mb-4"> Liked Blogs</h3>
 
   {% if posts %}
     <div class="row">
@@ -14,7 +14,7 @@
       {% endfor %}
     </div>
   {% else %}
-    <p>You haven’t Saved any blogs yet.</p>
+    <p>You haven’t liked any blogs yet.</p>
   {% endif %}
 </div>
 {% endblock %}

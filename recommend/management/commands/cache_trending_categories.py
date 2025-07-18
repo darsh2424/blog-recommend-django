@@ -24,7 +24,7 @@ class Command(BaseCommand):
                     comments_count=Count('comments'),
                     days_old=now().date() - F('created_at__date'),
                 )
-                .values('category_id', 'id', 'views_count', 'likes_count', 'comments_count', 'days_old')
+                .values('category_id', 'id', 'annotated_views_count', 'annotated_likes_count', 'comments_count', 'days_old')
                 .order_by('category_id')
             )
 

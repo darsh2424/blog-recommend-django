@@ -3,6 +3,7 @@ from django.contrib.auth import logout
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.utils.timezone import now
+from django.urls import reverse
 from django.core.cache import cache
 from django.contrib import messages
 from datetime import datetime, timedelta
@@ -12,14 +13,14 @@ import os
 from pathlib import Path
 import requests
 from django.utils.text import slugify  
-from blog.models import Post, Category, Comment
+from blog.models import Post, Category, Comment, CommentReply
 from users.models import User, UserProfile, UserPostActivity, PostInteraction
 from recommend.utils import get_user_recommendations, get_trending_posts_by_score
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.csrf import csrf_exempt
 import json
 from django.views.decorators.http import require_POST
-from django.http import JsonResponse
+from django.http import JsonResponse,HttpResponseRedirect
 
 def paginate(request, queryset, per_page=9):
     paginator = Paginator(queryset, per_page)
@@ -154,8 +155,9 @@ def for_you_view(request):
     })
 
 
-@login_required
 def following_posts(request):
+    if not request.user.is_authenticated:
+        return redirect('/')
     # Get the current user's profile
     profile = request.user.profile
     
@@ -250,7 +252,7 @@ def user_profile_view(request, username):
 def post_detail_view(request, post_id):
     categories = Category.objects.all().order_by('name')
     post = get_object_or_404(Post, id=post_id)
-    comments = Comment.objects.filter(post=post).order_by('-created_at')
+    comments = post.comments.all().order_by('created_at')
 
     profile_user = get_object_or_404(User, username=post.user.username)
 
@@ -263,11 +265,33 @@ def post_detail_view(request, post_id):
 
 
     is_following = False
-    
-    if request.user.is_authenticated and request.user != post.user:
-        is_following = request.user.profile.is_following(post.user.profile)
+    is_liked = False
+    is_saved = False
+
+    if request.user.is_authenticated:
+        try:
+            interaction = PostInteraction.objects.get(user=request.user, post=post)
+            is_liked = interaction.liked
+        except PostInteraction.DoesNotExist:
+            pass
+
+        is_saved = post in request.user.profile.saved_posts.all()
+
+        if post.user != request.user:
+            is_following = request.user.profile.is_following(post.user.profile)
+
    
-    return render(request, 'post_detail.html', {'post': post, 'comments': comments,'categories':categories,'is_following': is_following,'profile_user':profile_user})
+    return render(request, 'post_detail.html', 
+            {
+                'post': post, 
+                'comments': comments,
+                'categories':categories,
+                'is_following': is_following,
+                'is_liked':is_liked,
+                'is_saved':is_saved,
+                'profile_user':profile_user
+             }
+        )
 
 
 def logout_view(request):
@@ -748,6 +772,12 @@ def toggle_like(request, post_id):
 @login_required
 def toggle_save(request, post_id):
     post = get_object_or_404(Post, id=post_id)
+
+    interaction, created = PostInteraction.objects.get_or_create(user=request.user, post=post)
+    
+    interaction.saved = not interaction.saved
+    interaction.save()
+
     profile = request.user.profile
 
     if post in profile.saved_posts.all():
@@ -764,7 +794,7 @@ def saved_posts_view(request):
     posts = request.user.profile.saved_posts.order_by('-created_at')
     categories = Category.objects.all().order_by('name')
 
-    return render(request, 'user_saved_posts.html', {
+    return render(request, 'saved_post.html', {
         'posts': posts,
         'categories': categories,
     })
@@ -776,7 +806,104 @@ def liked_posts_view(request):
 
     categories = Category.objects.all().order_by('name')
 
-    return render(request, 'user_liked_posts.html', {
+    return render(request, 'liked_posts.html', {
         'posts': liked_posts,
         'categories': categories,
     })
+
+@login_required
+def add_comment(request, post_id):
+    if request.method == 'POST':
+        post = get_object_or_404(Post, id=post_id)
+        text = request.POST.get('comment_text')
+        if text:
+            Comment.objects.create(post=post, user=request.user, text=text)
+    return redirect('post_detail', post_id=post_id)
+
+
+@login_required
+def add_reply(request, comment_id):
+    if request.method == 'POST':
+        comment = get_object_or_404(Comment, id=comment_id)
+        text = request.POST.get('reply_text')
+        if text:
+            reply = CommentReply.objects.create(
+                comment=comment,
+                parent_comment=comment,
+                user=request.user,
+                text=text
+            )
+            return JsonResponse({
+                'status': 'success',
+                'reply': {
+                    'id': reply.id,
+                    'text': reply.text,
+                    'username': reply.user.username,
+                    'created_at': reply.created_at.strftime('%b %d, %Y %I:%M %p'),
+                    'delete_url': reverse('delete_reply', args=[reply.id])
+                }
+            })
+    return JsonResponse({'status': 'error'}, status=400)
+
+
+@require_POST
+@login_required
+def inline_edit_comment(request, comment_id):
+    comment = get_object_or_404(Comment, id=comment_id, user=request.user)
+    
+    if not comment.is_editable:
+        return JsonResponse({'status': 'error', 'message': 'Editing time expired'}, status=403)
+    
+    text = request.POST.get('text', '').strip()
+    if not text:
+        return JsonResponse({'status': 'error', 'message': 'Text cannot be empty'}, status=400)
+    
+    comment.text = text
+    comment.save()
+    return JsonResponse({'status': 'success', 'text': comment.text})
+
+
+@login_required
+def delete_comment(request, comment_id):
+    comment = get_object_or_404(Comment, id=comment_id, user=request.user)
+    if not comment.is_editable:
+        messages.error(request, "Comment can only be deleted within 24 hours.")
+        return redirect('post_detail', post_id=comment.post.id)
+
+    post_id = comment.post.id
+    comment.delete()
+    # messages.success(request, "Comment deleted.")
+    return HttpResponseRedirect(
+        reverse('post_detail', args=[post_id]) + '#comments-section'
+    )
+
+
+@require_POST
+@login_required
+def inline_edit_reply(request, reply_id):
+    reply = get_object_or_404(CommentReply, id=reply_id, user=request.user)
+    if not reply.is_editable:
+        return JsonResponse({'status': 'error', 'message': 'Editing time expired'}, status=403)
+
+    text = request.POST.get('text', '').strip()
+    if not text:
+        return JsonResponse({'status': 'error', 'message': 'Text cannot be empty'}, status=400)
+
+    reply.text = text
+    reply.save()
+    return JsonResponse({'status': 'success', 'text': reply.text})
+
+
+@login_required
+def delete_reply(request, reply_id):
+    reply = get_object_or_404(CommentReply, id=reply_id, user=request.user)
+    if not reply.is_editable:
+        messages.error(request, "Reply can only be deleted within 24 hours.")
+        return redirect('post_detail', post_id=reply.comment.post.id)
+
+    post_id = reply.comment.post.id
+    reply.delete()
+    # messages.success(request, "Reply deleted.")
+    return HttpResponseRedirect(
+        reverse('post_detail', args=[reply.comment.post.id]) + f'#comment-{reply.comment.id}'
+    )

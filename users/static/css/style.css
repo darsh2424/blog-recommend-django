@@ -21,7 +21,7 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  /* z-index: 1000; */
+  z-index: 1000;
   transition: transform 0.3s ease;
   overflow-y: auto;
   border-right: 1px solid #ddd;
@@ -239,3 +239,17 @@ body {
 img[loading="lazy"] {
   background-color: #f2f2f2;
 }
+
+html {
+    scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+.comment-block, .reply-block {
+    scroll-margin-top: 80px; 
+  }

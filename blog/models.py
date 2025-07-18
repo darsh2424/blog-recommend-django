@@ -1,3 +1,4 @@
+from django.utils import timesince,timezone
 from django.db import models
 from users.models import User
 
@@ -39,6 +40,10 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Comment by {self.user.username} on {self.post.title}"
+    
+    @property
+    def is_editable(self):
+        return (timezone.now() - self.created_at).total_seconds() <= 86400  
 
     @property
     def replies_count(self):
@@ -49,6 +54,19 @@ class CommentReply(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="comment_replies")
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    parent_comment = models.ForeignKey(Comment, on_delete=models.CASCADE, related_name="nested_replies", null=True, blank=True)
+
+    def __str__(self):
+        return f"Reply by {self.user.username} to comment {self.comment.id}"
+
+    @property
+    def is_editable(self):
+        return (timezone.now() - self.created_at).total_seconds() <= 86400  
+
+    @property
+    def time_since(self):
+        return timesince(self.created_at)
+
 
 class PostReport(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="reports")
