@@ -1,0 +1,103 @@
+{% extends 'admin_management/base.html' %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Manage Posts</h2>
+    <div class="text-sm text-gray-500">
+        Total Posts: {{ posts.count }}
+    </div>
+</div>
+
+<!-- Posts Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Post Details</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Engagement</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reports</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for post in posts %}
+                <tr>
+                    <td class="px-6 py-4">
+                        <div class="max-w-xs">
+                            <div class="text-sm font-medium text-gray-900 truncate">
+                                <a href="/post/{{ post.id }}" class="hover:text-blue-600" target="_blank">
+                                    {{ post.title|truncatechars:40 }}
+                                </a>
+                            </div>
+                            <div class="text-sm text-gray-500 truncate">
+                                {{ post.content|truncatechars:60|default:"No description" }}
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">
+                                by {{ post.user.username|default:post.user.email }}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            {{ post.category.name }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex space-x-2">
+                            <span class="inline-flex items-center text-xs text-red-600">
+                                <i class="fas fa-heart mr-1"></i>{{ post.annotated_likes_count }}
+                            </span>
+                            <span class="inline-flex items-center text-xs text-blue-600">
+                                <i class="fas fa-eye mr-1"></i>{{ post.annotated_views_count }}
+                            </span>
+                            <span class="inline-flex items-center text-xs text-green-600">
+                                <i class="fas fa-comment mr-1"></i>{{ post.annotated_comments_count }}
+                            </span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if post.reports_count > 0 %}
+                        <div class="relative group">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 cursor-pointer">
+                                {{ post.reports_count }} reports
+                            </span>
+                            <!-- Tooltip -->
+                            <div class="absolute z-10 invisible group-hover:visible bg-gray-900 text-white text-xs rounded py-2 px-3 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48">
+                                {% for report in post_reports|default_if_none:"" %}
+                                    {% for r in report %}
+                                        {% if r.post_id == post.id %}
+                                            <div class="flex justify-between">
+                                                <span>{{ r.get_reason_display }}</span>
+                                                <span>{{ r.count }}</span>
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <span class="text-gray-400 text-xs">No reports</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <form id="deletePostForm{{ post.id }}" method="post" action="{% url 'delete_post' post.id %}" class="inline">
+                            {% csrf_token %}
+                        </form>
+                        <button onclick="showDeleteModal('deletePostForm{{ post.id }}', 'Delete Post', 'This action will permanently delete this post and all its comments.', 'Delete Post {{ post.id }}')" 
+                                class="text-red-600 hover:text-red-900">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">No posts found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
