@@ -5,7 +5,9 @@ class RecommendConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'recommend'
 
-    # def ready(self):
-    #     if os.environ.get('RUN_MAIN') == 'true':
-    #         from . import scheduler
-    #         scheduler.start()
+    def ready(self):
+        from . import signals
+
+        # if os.environ.get('RUN_MAIN') == 'true':
+        #     from . import scheduler
+        #     scheduler.start()

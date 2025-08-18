@@ -39,22 +39,60 @@
     <div class="d-flex gap-2 mb-4">
       <button class="btn {% if is_liked %}btn-outline-light text-dark{% else %}btn-danger{% endif %}" 
               id="like-btn" data-post-id="{{ post.id }}">
-        {% if is_liked %}❤️ Liked{% else %}🤍 Like{% endif %}
+        {% if is_liked %} Liked{% else %} Like{% endif %}
       </button>
 
       <button class="btn {% if is_saved %}btn-secondary{% else %}btn-outline-secondary{% endif %}" 
               id="save-btn" data-post-id="{{ post.id }}">
-        {% if is_saved %}🔖 Saved{% else %}🔖 Save{% endif %}
+        {% if is_saved %} Saved{% else %} Save{% endif %}
       </button>
+
+      <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#reportModal">
+        Report
+      </button>
+      
     </div>
     {% endif %}
 
+    <!-- Report Modal -->
+    <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="reportModalLabel">Report Post</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <form id="report-form">
+              <div class="mb-3">
+                <label for="reason" class="form-label">Reason</label>
+                <select id="reason" class="form-select" required>
+                  <option value="" disabled selected>Choose reason...</option>
+                  <option value="spam">Spam Content</option>
+                  <option value="inappropriate">Inappropriate Content</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="fake_news">Fake News/Misinformation</option>
+                  <option value="copyright">Copyright Violation</option>
+                  <option value="violence">Violence/Threats</option>
+                  <option value="adult">Adult Content</option>
+                  <option value="hate_speech">Hate Speech</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-danger">Submit Report</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Post Image -->
-    {% if post.image_url %}
-      <img src="{{ post.image_url|resolve_media_url|default:'https://via.placeholder.com/250x200?text=No+Image' }}"
-           alt="Blog image" class="img-fluid rounded mb-4 w-100" loading="lazy">
-    {% endif %}
+    <div class="d-flex justify-content-center">
+      {% if post.image_url %}
+        <img src="{{ post.image_url|resolve_media_url|default:'https://via.placeholder.com/250x200?text=No+Image' }}"
+            alt="Blog image" class="img-fluid rounded mb-4" loading="lazy">
+      {% endif %}
+    </div>
 
     <!-- Post Content -->
     <div class="post-content mb-4" style="line-height: 1.8;">
@@ -62,7 +100,7 @@
     </div>
 
     <div id="comments-section">
-      <h5 class="mt-4 mb-3">💬 Comments ({{ post.comment_count }})</h5>
+      <h5 class="mt-4 mb-3"> Comments ({{ post.comment_count }})</h5>
         <div class="comment-container">
           {% for comment in comments %}
             <div class="mb-3 p-3 bg-light rounded comment-block" id="comment-{{ comment.id }}" data-comment-id="{{ comment.id }}">
@@ -451,5 +489,30 @@
       });
     });
 });
+document.getElementById("report-form").addEventListener("submit", function (e) {
+  e.preventDefault();
+
+  const reason = document.getElementById("reason").value;
+  const postId = "{{ post.id }}";
+
+  fetch(`/post/${postId}/report/`, {
+    method: "POST",
+    headers: {
+      "X-CSRFToken": "{{ csrf_token }}",
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({ reason })
+  })
+    .then(response => response.json())
+    .then(data => {
+      alert(data.message);
+      if (data.success) {
+        document.getElementById("report-form").reset();
+        var modal = bootstrap.Modal.getInstance(document.getElementById("reportModal"));
+        modal.hide();
+      }
+    });
+});
+
 </script>
 {% endblock %}

@@ -13,8 +13,10 @@ def resolve_media_url(value):
     if value.startswith(('http://', 'https://')):
         return value
     
+    
     # If it's a local media file path
     if value.startswith('images/'):  # or whatever prefix you use
         return os.path.join(settings.MEDIA_URL, value)
     
     return value
+

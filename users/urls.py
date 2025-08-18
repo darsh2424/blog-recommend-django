@@ -26,6 +26,7 @@ urlpatterns = [
     path('write/', views.write_post_view, name='write_post'),
     path('post/<int:post_id>/like/', views.toggle_like, name='toggle_like'),
     path('post/<int:post_id>/save/', views.toggle_save, name='toggle_save'),
+    path("post/<int:post_id>/report/", views.report_post, name="report_post"),
     path('post/<int:post_id>/comment/', views.add_comment, name='add_comment'),
     path('comment/<int:comment_id>/reply/', views.add_reply, name='add_reply'),
     path('comment/<int:comment_id>/inline-edit/', views.inline_edit_comment, name='inline_edit_comment'),

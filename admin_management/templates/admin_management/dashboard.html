@@ -1,480 +1,660 @@
 {% extends 'admin_management/base.html' %}
+
 {% block content %}
-<div class="space-y-6">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <!-- Dashboard Summary Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Users Card -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Total Users</p>
+                    <h3 id="total-users" class="text-2xl font-bold text-gray-900">--</h3>
+                </div>
+                <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                    <i class="fas fa-users text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <a href="{% url 'manage_users' %}" class="text-sm font-medium text-blue-600 hover:text-blue-800">
+                    View all users <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+        </div>
 
-  <!-- Controls: global default range (optional) -->
-  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <label class="text-sm text-gray-600">Default range:</label>
-      <button id="last7Btn" class="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200">Last 7 days</button>
-      <button id="last30Btn" class="px-3 py-1 bg-gray-100 rounded text-sm hover:bg-gray-200">Last 30 days</button>
+        <!-- Posts Card -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Total Posts</p>
+                    <h3 id="total-posts" class="text-2xl font-bold text-gray-900">--</h3>
+                </div>
+                <div class="p-3 rounded-full bg-green-100 text-green-600">
+                    <i class="fas fa-file-alt text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <a href="{% url 'manage_posts' %}" class="text-sm font-medium text-green-600 hover:text-green-800">
+                    View all posts <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Categories Card -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Categories</p>
+                    <h3 id="total-categories" class="text-2xl font-bold text-gray-900">--</h3>
+                </div>
+                <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                    <i class="fas fa-tags text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <a href="{% url 'manage_categories' %}" class="text-sm font-medium text-purple-600 hover:text-purple-800">
+                    Manage categories <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+        </div>
+
+        <!-- Reports Card -->
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Reports</p>
+                    <h3 id="total-reports" class="text-2xl font-bold text-gray-900">--</h3>
+                </div>
+                <div class="p-3 rounded-full bg-red-100 text-red-600">
+                    <i class="fas fa-flag text-xl"></i>
+                </div>
+            </div>
+            <div class="mt-4">
+                <a href="{% url 'manage_posts' %}" class="text-sm font-medium text-red-600 hover:text-red-800">
+                    View reports <i class="fas fa-arrow-right ml-1"></i>
+                </a>
+            </div>
+        </div>
     </div>
-    <div class="text-sm text-gray-500">Tip: use chart expand (🔍) to open details and change dates there.</div>
-  </div>
 
-  <!-- Grid of charts -->
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Date Range Selector -->
+    <div class="bg-white rounded-lg shadow p-6 mb-8">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <h3 class="text-lg font-semibold text-gray-900">Select Date Range</h3>
+            <div class="flex flex-wrap items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <label for="dashboardStartDate" class="text-sm font-medium text-gray-700">From:</label>
+                    <input type="date" id="dashboardStartDate" class="border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <div class="flex items-center gap-2">
+                    <label for="dashboardEndDate" class="text-sm font-medium text-gray-700">To:</label>
+                    <input type="date" id="dashboardEndDate" class="border border-gray-300 rounded px-3 py-2 text-sm">
+                </div>
+                <button id="applyDateRange" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium">
+                    Apply
+                </button>
+                <button id="resetDateRange" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded text-sm font-medium">
+                    Reset
+                </button>
+            </div>
+        </div>
+    </div>
 
-    <!-- User Growth -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">User Growth Trend</h3>
-        <div class="flex items-center gap-2">
-          <input type="date" id="ug_start" class="text-sm border rounded px-2 py-1">
-          <input type="date" id="ug_end" class="text-sm border rounded px-2 py-1">
-          <button id="ug_fetch" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Fetch</button>
-          <button class="px-2 py-1 bg-gray-100 rounded" data-chart="userGrowth" onclick="openExpanded(this)">🔍</button>
+    <!-- Charts Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- User Growth Trend -->
+        <div class="bg-white p-6 rounded-lg shadow-lg chart-container" data-chart-type="user_growth">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">User Growth Trend</h3>
+                <div class="flex items-center gap-2">
+                    <button class="expand-btn text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50" title="Expand Chart">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="refresh-btn text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-50" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="relative h-80">
+                <canvas id="userGrowthChart" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
         </div>
-      </div>
-      <div class="chart-container overflow-x-auto">
-        <div class="min-w-full">
-          <canvas id="userGrowthChart" class="w-full" style="max-height:360px;"></canvas>
-        </div>
-      </div>
-    </section>
 
-    <!-- Daily Active Users -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Daily Active Users</h3>
-        <div class="flex items-center gap-2">
-          <input type="date" id="dau_start" class="text-sm border rounded px-2 py-1">
-          <input type="date" id="dau_end" class="text-sm border rounded px-2 py-1">
-          <button id="dau_fetch" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Fetch</button>
-          <button class="px-2 py-1 bg-gray-100 rounded" data-chart="dau" onclick="openExpanded(this)">🔍</button>
+        <!-- Daily Active Users -->
+        <div class="bg-white p-6 rounded-lg shadow-lg chart-container" data-chart-type="daily_active_users">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Daily Active Users</h3>
+                <div class="flex items-center gap-2">
+                    <button class="expand-btn text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50" title="Expand Chart">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="refresh-btn text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-50" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="relative h-80">
+                <canvas id="dailyActiveUsersChart" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
         </div>
-      </div>
-      <div class="chart-container overflow-x-auto">
-        <div class="min-w-full">
-          <canvas id="dauChart" class="w-full" style="max-height:360px;"></canvas>
-        </div>
-      </div>
-    </section>
 
-    <!-- Post Engagement -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Post Engagement (Likes vs Views)</h3>
-        <div class="flex items-center gap-2">
-          <input type="date" id="pe_start" class="text-sm border rounded px-2 py-1">
-          <input type="date" id="pe_end" class="text-sm border rounded px-2 py-1">
-          <button id="pe_fetch" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Fetch</button>
-          <button class="px-2 py-1 bg-gray-100 rounded" data-chart="postEngagement" onclick="openExpanded(this)">🔍</button>
+        <!-- Post Engagement -->
+        <div class="bg-white p-6 rounded-lg shadow-lg chart-container" data-chart-type="post_engagement">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Post Engagement</h3>
+                <div class="flex items-center gap-2">
+                    <button class="expand-btn text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50" title="Expand Chart">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="refresh-btn text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-50" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="relative h-80">
+                <canvas id="postEngagementChart" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
         </div>
-      </div>
-      <div class="chart-container overflow-x-auto">
-        <div class="min-w-full">
-          <canvas id="postEngagementChart" class="w-full" style="max-height:360px;"></canvas>
-        </div>
-      </div>
-    </section>
 
-    <!-- Top 7 Posts (horizontal) -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Top 7 Posts (by likes)</h3>
-        <div class="flex items-center gap-2">
-          <input type="date" id="tp_start" class="text-sm border rounded px-2 py-1">
-          <input type="date" id="tp_end" class="text-sm border rounded px-2 py-1">
-          <button id="tp_fetch" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Fetch</button>
-          <button class="px-2 py-1 bg-gray-100 rounded" data-chart="topPosts" onclick="openExpanded(this)">🔍</button>
+        <!-- Top 7 Posts -->
+        <div class="bg-white p-6 rounded-lg shadow-lg chart-container" data-chart-type="top_posts">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Top Performing Posts</h3>
+                <div class="flex items-center gap-2">
+                    <button class="expand-btn text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50" title="Expand Chart">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="refresh-btn text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-50" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="relative h-80">
+                <canvas id="topPostsChart" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
         </div>
-      </div>
-      <div class="chart-container overflow-x-auto">
-        <div class="min-w-full">
-          <canvas id="topPostsChart" class="w-full" style="max-height:360px;"></canvas>
-        </div>
-      </div>
-    </section>
 
-    <!-- Category Breakdown -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Category Breakdown</h3>
-        <div class="flex items-center gap-2">
-          <input type="date" id="cat_start" class="text-sm border rounded px-2 py-1">
-          <input type="date" id="cat_end" class="text-sm border rounded px-2 py-1">
-          <button id="cat_fetch" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Fetch</button>
-          <button class="px-2 py-1 bg-gray-100 rounded" data-chart="categories" onclick="openExpanded(this)">🔍</button>
+        <!-- Category Breakdown -->
+        <div class="bg-white p-6 rounded-lg shadow-lg chart-container" data-chart-type="category_breakdown">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Content by Category</h3>
+                <div class="flex items-center gap-2">
+                    <button class="expand-btn text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50" title="Expand Chart">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="refresh-btn text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-50" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="relative h-80">
+                <canvas id="categoryBreakdownChart" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
         </div>
-      </div>
-      <div class="chart-container overflow-x-auto">
-        <div class="min-w-full">
-          <canvas id="categoryChart" class="w-full" style="max-height:360px;"></canvas>
-        </div>
-      </div>
-    </section>
 
-    <!-- Reports -->
-    <section class="bg-white rounded-lg shadow p-4">
-      <div class="flex items-center justify-between mb-3">
-        <h3 class="text-lg font-semibold">Reports</h3>
-        <div class="flex items-center gap-2">
-          <input type="date" id="r_start" class="text-sm border rounded px-2 py-1">
-          <input type="date" id="r_end" class="text-sm border rounded px-2 py-1">
-          <button id="r_fetch" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Fetch</button>
-          <button class="px-2 py-1 bg-gray-100 rounded" data-chart="reports" onclick="openExpanded(this)">🔍</button>
+        <!-- Reports Trend -->
+        <div class="bg-white p-6 rounded-lg shadow-lg chart-container" data-chart-type="reports">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Content Reports</h3>
+                <div class="flex items-center gap-2">
+                    <button class="expand-btn text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-blue-50" title="Expand Chart">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="refresh-btn text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-50" title="Refresh Data">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="relative h-80">
+                <canvas id="reportsChart" class="absolute inset-0 w-full h-full"></canvas>
+            </div>
         </div>
-      </div>
-      <div class="chart-container overflow-x-auto">
-        <div class="min-w-full">
-          <canvas id="reportsChart" class="w-full" style="max-height:360px;"></canvas>
-        </div>
-      </div>
-    </section>
-
-  </div>
+    </div>
 </div>
 
 <!-- Expanded Chart Modal -->
-<div id="chartModal" class="fixed inset-0 bg-gray-600 bg-opacity-60 hidden items-center justify-center z-50">
-  <div class="bg-white rounded-lg p-4 w-[95%] h-[85%] max-w-7xl flex flex-col">
-    <div class="flex items-center justify-between mb-3">
-      <h3 id="expandedTitle" class="text-lg font-semibold">Chart</h3>
-      <div class="flex items-center gap-2">
-        <input type="date" id="exp_start" class="text-sm border rounded px-2 py-1">
-        <input type="date" id="exp_end" class="text-sm border rounded px-2 py-1">
-        <button id="exp_fetch" class="px-3 py-1 bg-blue-600 text-white rounded text-sm">Fetch</button>
-        <button onclick="closeModal()" class="px-3 py-1 bg-gray-200 rounded">Close</button>
-      </div>
+<div id="expandedChartModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-auto">
+            <div class="p-6">
+                <!-- Modal Header -->
+                <div class="flex justify-between items-center mb-6">
+                    <h3 id="expandedChartTitle" class="text-xl font-bold text-gray-900"></h3>
+                    <button id="closeExpandedChart" class="text-gray-400 hover:text-gray-600 p-1">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <!-- Date Range Controls -->
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                    <div class="flex flex-wrap items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <label for="startDate" class="text-sm font-medium text-gray-700">Start Date:</label>
+                            <input type="date" id="startDate" class="border border-gray-300 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="endDate" class="text-sm font-medium text-gray-700">End Date:</label>
+                            <input type="date" id="endDate" class="border border-gray-300 rounded px-3 py-2 text-sm">
+                        </div>
+                        <button id="fetchDataBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium">
+                            <i class="fas fa-sync-alt mr-1"></i>
+                            Update Chart
+                        </button>
+                        <button id="resetDateBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded text-sm font-medium">
+                            <i class="fas fa-undo mr-1"></i>
+                            Reset Range
+                        </button>
+                    </div>
+                    <div id="dateError" class="text-red-500 text-sm mt-2 hidden"></div>
+                </div>
+
+                <!-- Expanded Chart Canvas -->
+                <div class="relative h-[500px] w-full">
+                    <canvas id="expandedChart" class="absolute inset-0 w-full h-full"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="flex-1 overflow-auto">
-      <div class="h-full">
-        <canvas id="expandedCanvas" class="w-full h-full"></canvas>
-      </div>
-    </div>
-  </div>
 </div>
 
-<!-- Chart.js is already included in base.html -->
 <script>
-/* --- Helper utilities --- */
-const CHART_ENDPOINTS = {
-  userGrowth: "{% url 'chart_user_growth' %}",
-  dau: "{% url 'chart_daily_active_users' %}",
-  postEngagement: "{% url 'chart_post_engagement' %}",
-  topPosts: "{% url 'chart_top_posts' %}",
-  categories: "{% url 'chart_category_breakdown' %}",
-  reports: "{% url 'chart_reports' %}",
-};
+let charts = {};
+let expandedChart = null;
+let currentChartType = '';
+const chartDataUrl = "{% url 'get_chart_data' %}";
+const dashboardStatsUrl = "{% url 'get_dashboard_stats' %}";
 
-function todayISO() { return new Date().toISOString().slice(0,10); }
-function daysAgoISO(n) { const d = new Date(); d.setDate(d.getDate()-n); return d.toISOString().slice(0,10); }
-
-// set default inputs to last 7 days
-function setDefaultDates() {
-  const defaults = { start: daysAgoISO(6), end: todayISO() };
-  ['ug','dau','pe','tp','cat','r'].forEach(prefix => {
-    const s = document.getElementById(prefix + '_start');
-    const e = document.getElementById(prefix + '_end');
-    if (s && e) { s.value = defaults.start; e.value = defaults.end; }
-  });
-  // expanded modal defaults
-  document.getElementById('exp_start').value = defaults.start;
-  document.getElementById('exp_end').value = defaults.end;
-}
-setDefaultDates();
-
-// quick global buttons
-document.getElementById('last7Btn').addEventListener('click', () => { setDefaultDates(); fetchAllCharts(); });
-document.getElementById('last30Btn').addEventListener('click', () => {
-  const start = daysAgoISO(29), end = todayISO();
-  ['ug','dau','pe','tp','cat','r'].forEach(prefix => {
-    const s = document.getElementById(prefix + '_start');
-    const e = document.getElementById(prefix + '_end');
-    if (s && e) { s.value = start; e.value = end; }
-  });
-  document.getElementById('exp_start').value = start;
-  document.getElementById('exp_end').value = end;
-  fetchAllCharts();
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default date range (last 7 days)
+    const today = new Date();
+    const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    // Set dates for dashboard and modal
+    document.getElementById('dashboardStartDate').value = lastWeek.toISOString().split('T')[0];
+    document.getElementById('dashboardEndDate').value = today.toISOString().split('T')[0];
+    document.getElementById('startDate').value = lastWeek.toISOString().split('T')[0];
+    document.getElementById('endDate').value = today.toISOString().split('T')[0];
+    
+    // Initialize all charts
+    initializeCharts();
+    
+    // Load dashboard stats
+    loadDashboardStats();
+    
+    // Event listeners for expanded chart modal
+    setupExpandedChartModal();
+    
+    // Apply date range to all charts
+    document.getElementById('applyDateRange').addEventListener('click', function() {
+        const startDate = document.getElementById('dashboardStartDate').value;
+        const endDate = document.getElementById('dashboardEndDate').value;
+        
+        if (validateDateRange(startDate, endDate)) {
+            // Update all charts with new date range
+            const chartTypes = ['user_growth', 'daily_active_users', 'post_engagement', 
+                               'top_posts', 'category_breakdown', 'reports'];
+            
+            chartTypes.forEach(chartType => {
+                loadChart(chartType, startDate, endDate);
+            });
+        }
+    });
+    
+    // Reset date range
+    document.getElementById('resetDateRange').addEventListener('click', function() {
+        const today = new Date();
+        const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        
+        document.getElementById('dashboardStartDate').value = lastWeek.toISOString().split('T')[0];
+        document.getElementById('dashboardEndDate').value = today.toISOString().split('T')[0];
+        
+        // Reload all charts with default range
+        initializeCharts();
+    });
+    
+    // Add refresh buttons functionality
+    document.querySelectorAll('.refresh-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const container = this.closest('.chart-container');
+            const chartType = container.dataset.chartType;
+            const startDate = document.getElementById('dashboardStartDate').value;
+            const endDate = document.getElementById('dashboardEndDate').value;
+            
+            loadChart(chartType, startDate, endDate);
+            
+            // Add visual feedback
+            this.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-sync-alt"></i>';
+            }, 1000);
+        });
+    });
 });
 
-// small validation
-function validateRange(start, end) {
-  if (!start || !end) return { ok:false, msg:'Select both start and end dates' };
-  const s = new Date(start), e = new Date(end);
-  if (s > e) return { ok:false, msg:'Start date cannot be after end date' };
-  const diffDays = Math.round((e - s) / (1000*60*60*24)) + 1;
-  if (diffDays > 730) return { ok:false, msg:'Range too large (max 2 years)' }; // safety cap
-  return { ok:true, days: diffDays };
+function initializeCharts() {
+    const chartTypes = ['user_growth', 'daily_active_users', 'post_engagement', 'top_posts', 'category_breakdown', 'reports'];
+    
+    chartTypes.forEach(chartType => {
+        loadChart(chartType);
+    });
 }
 
-/* --- Chart instances holder --- */
-const INSTANCES = {};
+function loadChart(chartType, startDate = null, endDate = null) {
+    const params = new URLSearchParams({
+        chart_type: chartType
+    });
+    
+    if (startDate && endDate) {
+        params.append('start_date', startDate);
+        params.append('end_date', endDate);
+    }
+   
 
-/* --- Generic helpers to expand canvas width for many labels (scroll) --- */
-function setCanvasWidthByLabels(canvas, labels, perLabelPx = 60, minWidth = 600) {
-  const width = Math.max(minWidth, labels.length * perLabelPx);
-  canvas.style.width = width + 'px';
+    // fetch(`/admin-management/api/chart-data/?${params}`)
+     fetch(`${chartDataUrl}?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            renderChart(chartType, data);
+        })
+        .catch(error => {
+            console.error('Error loading chart:', error);
+        });
 }
 
-/* --- Render helpers for each chart type --- */
-function clearInstance(key) {
-  if (INSTANCES[key]) {
-    INSTANCES[key].destroy();
-    INSTANCES[key] = null;
-  }
+function renderChart(chartType, data) {
+    const canvasId = getCanvasId(chartType);
+    const canvas = document.getElementById(canvasId);
+    
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Destroy existing chart
+    if (charts[chartType]) {
+        charts[chartType].destroy();
+    }
+    
+    let config = getChartConfig(chartType, data);
+    
+    // Add scroll functionality for charts with many data points
+    if (data.labels && data.labels.length > 10) {
+        config.options.scales = config.options.scales || {};
+        config.options.scales.x = config.options.scales.x || {};
+        config.options.scales.x.ticks = {
+            maxTicksLimit: 10
+        };
+    }
+    
+    charts[chartType] = new Chart(ctx, config);
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url, { credentials: 'same-origin' });
-  if (!res.ok) throw new Error('Network error: ' + res.status);
-  return res.json();
+function getCanvasId(chartType) {
+    const mapping = {
+        'user_growth': 'userGrowthChart',
+        'daily_active_users': 'dailyActiveUsersChart',
+        'post_engagement': 'postEngagementChart',
+        'top_posts': 'topPostsChart',
+        'category_breakdown': 'categoryBreakdownChart',
+        'reports': 'reportsChart'
+    };
+    return mapping[chartType];
 }
 
-/* USER GROWTH (line) */
-async function loadUserGrowth(start, end, canvasId='userGrowthChart') {
-  const valid = validateRange(start, end);
-  if (!valid.ok) { alert(valid.msg); return; }
-  try {
-    const url = new URL(CHART_ENDPOINTS.userGrowth, window.location.origin);
-    url.searchParams.set('start', start); url.searchParams.set('end', end);
-    const raw = await fetchJson(url);
-    // raw expected: list of objects with 'period' or 'period' key depending on backend
-    // We'll handle both shapes: array of {period: '2023-..', count: X} or {label, value}
-    const labels = raw.map(r => r.period || r.label || r.date);
-    const values = raw.map(r => r.count || r.value || r.users || r.users_count || 0);
-
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    clearInstance(canvasId);
-    setCanvasWidthByLabels(document.getElementById(canvasId), labels, 70, 700);
-    INSTANCES[canvasId] = new Chart(ctx, {
-      type: 'line',
-      data: { labels, datasets: [{ label: 'New Users', data: values, borderColor: 'rgb(59,130,246)', backgroundColor:'rgba(59,130,246,0.08)', fill:true, tension:0.2 }] },
-      options: {
-        responsive: false, // false so we can control width and get scrollbar
+function getChartConfig(chartType, data) {
+    const baseOptions = {
+        responsive: true,
         maintainAspectRatio: false,
-        animation: false,
-        scales: { y: { beginAtZero:true } },
-        plugins: { legend: { display: true, position: 'bottom' } }
-      }
+        plugins: {
+            legend: {
+                position: 'top'
+            }
+        }
+    };
+    
+    switch (chartType) {
+        case 'user_growth':
+        case 'daily_active_users':
+        case 'reports':
+            return {
+                type: 'line',
+                data: data,
+                options: baseOptions
+            };
+            
+        case 'post_engagement':
+            return {
+                type: 'bar',
+                data: data,
+                options: {
+                    ...baseOptions,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+            
+        case 'top_posts':
+            return {
+                type: 'bar',
+                data: data,
+                options: {
+                    ...baseOptions,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            };
+            
+        case 'category_breakdown':
+            return {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    ...baseOptions,
+                    plugins: {
+                        ...baseOptions.plugins,
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            };
+            
+        default:
+            return {
+                type: 'line',
+                data: data,
+                options: baseOptions
+            };
+    }
+}
+
+function loadDashboardStats() {
+ 
+
+     fetch(`${dashboardStatsUrl}`)
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('total-users').textContent = data.total_users || '0';
+            document.getElementById('total-posts').textContent = data.total_posts || '0';
+            document.getElementById('total-categories').textContent = data.total_categories || '0';
+            document.getElementById('total-reports').textContent = data.total_reports || '0';
+        })
+        .catch(error => {
+            console.error('Error loading dashboard stats:', error);
+        });
+}
+
+function setupExpandedChartModal() {
+    const modal = document.getElementById('expandedChartModal');
+    const closeBtn = document.getElementById('closeExpandedChart');
+    const fetchBtn = document.getElementById('fetchDataBtn');
+    const resetBtn = document.getElementById('resetDateBtn');
+    
+    // Expand button click handlers
+    document.querySelectorAll('.expand-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const container = this.closest('.chart-container');
+            const chartType = container.dataset.chartType;
+            openExpandedChart(chartType);
+        });
     });
-  } catch (err) { console.error(err); alert('Failed loading user growth'); }
-}
-
-/* DAU (line) */
-async function loadDAU(start, end, canvasId='dauChart') {
-  const valid = validateRange(start, end);
-  if (!valid.ok) { alert(valid.msg); return; }
-  try {
-    const url = new URL(CHART_ENDPOINTS.dau, window.location.origin);
-    url.searchParams.set('start', start); url.searchParams.set('end', end);
-    const raw = await fetchJson(url);
-    const labels = raw.map(r => r.period || r.label || r.date);
-    const values = raw.map(r => r.count || r.value || r.active || 0);
-
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    clearInstance(canvasId);
-    setCanvasWidthByLabels(document.getElementById(canvasId), labels, 70, 700);
-    INSTANCES[canvasId] = new Chart(ctx, {
-      type: 'line',
-      data: { labels, datasets: [{ label: 'Active Users', data: values, borderColor: 'rgb(16,185,129)', backgroundColor:'rgba(16,185,129,0.08)', fill:true, tension:0.2 }] },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        animation: false,
-        scales: { y: { beginAtZero:true } },
-        plugins: { legend: { display: true, position: 'bottom' } }
-      }
+    
+    // Close modal
+    closeBtn.addEventListener('click', closeExpandedChart);
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeExpandedChart();
+        }
     });
-  } catch (err) { console.error(err); alert('Failed loading DAU'); }
-}
-
-/* POST ENGAGEMENT (grouped bar: likes vs views) */
-async function loadPostEngagement(start, end, canvasId='postEngagementChart') {
-  const valid = validateRange(start, end);
-  if (!valid.ok) { alert(valid.msg); return; }
-  try {
-    const url = new URL(CHART_ENDPOINTS.postEngagement, window.location.origin);
-    url.searchParams.set('start', start); url.searchParams.set('end', end);
-    const raw = await fetchJson(url);
-    const labels = raw.map(r => r.period || r.label || r.date);
-    const likes = raw.map(r => r.likes || r.like_count || 0);
-    const views = raw.map(r => r.views || r.view_count || r.views_count || 0);
-
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    clearInstance(canvasId);
-    setCanvasWidthByLabels(document.getElementById(canvasId), labels, 70, 700);
-    INSTANCES[canvasId] = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Likes', data: likes, backgroundColor: 'rgba(59,130,246,0.85)' },
-          { label: 'Views', data: views, backgroundColor: 'rgba(34,197,94,0.85)' }
-        ]
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        animation: false,
-        scales: { y: { beginAtZero:true } },
-        plugins: { legend: { position: 'bottom' } }
-      }
+    
+    // Fetch data button
+    fetchBtn.addEventListener('click', function() {
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        
+        if (validateDateRange(startDate, endDate)) {
+            loadExpandedChart(currentChartType, startDate, endDate);
+        }
     });
-  } catch (err) { console.error(err); alert('Failed loading engagement'); }
-}
-
-/* TOP POSTS (horizontal) */
-async function loadTopPosts(start, end, canvasId='topPostsChart') {
-  const valid = validateRange(start, end);
-  if (!valid.ok) { alert(valid.msg); return; }
-  try {
-    const url = new URL(CHART_ENDPOINTS.topPosts, window.location.origin);
-    url.searchParams.set('start', start); url.searchParams.set('end', end);
-    const raw = await fetchJson(url);
-    const labels = raw.map(r => r.title || r.title_short || '(untitled)');
-    const vals = raw.map(r => r.view_count || r.views || r.likes || 0);
-
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    clearInstance(canvasId);
-    // horizontal bars: ensure minimum height / width so labels readable
-    setCanvasWidthByLabels(document.getElementById(canvasId), labels, 12, 600); // perLabelPx small for horizontal bars
-    INSTANCES[canvasId] = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets: [{ label: 'Views / Likes', data: vals, backgroundColor: 'rgba(245,158,11,0.9)' }] },
-      options: {
-        indexAxis: 'y',
-        responsive: false,
-        maintainAspectRatio: false,
-        animation: false,
-        scales: { x: { beginAtZero:true } },
-        plugins: { legend: { display: false } }
-      }
+    
+    // Reset date button
+    resetBtn.addEventListener('click', function() {
+        const today = new Date();
+        const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        
+        document.getElementById('startDate').value = lastWeek.toISOString().split('T')[0];
+        document.getElementById('endDate').value = today.toISOString().split('T')[0];
+        
+        loadExpandedChart(currentChartType);
+        hideError();
     });
-  } catch (err) { console.error(err); alert('Failed loading top posts'); }
 }
 
-/* CATEGORIES (doughnut) */
-async function loadCategories(start, end, canvasId='categoryChart') {
-  const valid = validateRange(start, end);
-  if (!valid.ok) { alert(valid.msg); return; }
-  try {
-    const url = new URL(CHART_ENDPOINTS.categories, window.location.origin);
-    url.searchParams.set('start', start); url.searchParams.set('end', end);
-    const raw = await fetchJson(url);
-    const labels = raw.map(r => r.name || r.category || '(none)');
-    const vals = raw.map(r => r.post_count || r.posts || 0);
+function openExpandedChart(chartType) {
+    currentChartType = chartType;
+    
+    const titles = {
+        'user_growth': 'User Growth Trend',
+        'daily_active_users': 'Daily Active Users',
+        'post_engagement': 'Post Engagement',
+        'top_posts': 'Top 7 Posts',
+        'category_breakdown': 'Category Breakdown',
+        'reports': 'Reports Trend'
+    };
+    
+    document.getElementById('expandedChartTitle').textContent = titles[chartType];
+    document.getElementById('expandedChartModal').classList.remove('hidden');
+    
+    // Load chart with current date range
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    
+    loadExpandedChart(chartType, startDate, endDate);
+}
 
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    clearInstance(canvasId);
-    INSTANCES[canvasId] = new Chart(ctx, {
-      type: 'doughnut',
-      data: { labels, datasets: [{ label: 'Posts', data: vals }] },
-      options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'right' } } }
+function closeExpandedChart() {
+    document.getElementById('expandedChartModal').classList.add('hidden');
+    
+    if (expandedChart) {
+        expandedChart.destroy();
+        expandedChart = null;
+    }
+    
+    currentChartType = '';
+    hideError();
+}
+
+function loadExpandedChart(chartType, startDate = null, endDate = null) {
+    const params = new URLSearchParams({
+        chart_type: chartType
     });
-  } catch (err) { console.error(err); alert('Failed loading categories'); }
+    
+    if (startDate && endDate) {
+        params.append('start_date', startDate);
+        params.append('end_date', endDate);
+    }
+    
+
+    // fetch(`/admin-management/api/chart-data/?${params}`)
+    fetch(`${chartDataUrl}?${params}`)
+        .then(response => response.json())
+        .then(data => {
+            renderExpandedChart(chartType, data);
+        })
+        .catch(error => {
+            console.error('Error loading expanded chart:', error);
+            showError('Failed to load chart data. Please try again.');
+        });
 }
 
-/* REPORTS (bar/line) */
-async function loadReports(start, end, canvasId='reportsChart') {
-  const valid = validateRange(start, end);
-  if (!valid.ok) { alert(valid.msg); return; }
-  try {
-    const url = new URL(CHART_ENDPOINTS.reports, window.location.origin);
-    url.searchParams.set('start', start); url.searchParams.set('end', end);
-    const raw = await fetchJson(url);
-    const labels = raw.map(r => r.period || r.label || r.date);
-    const vals = raw.map(r => r.count || r.value || r.reports || 0);
-
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    clearInstance(canvasId);
-    setCanvasWidthByLabels(document.getElementById(canvasId), labels, 70, 700);
-    INSTANCES[canvasId] = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets: [{ label: 'Reports', data: vals, backgroundColor:'rgba(244,63,94,0.9)' }] },
-      options: { responsive:false, maintainAspectRatio:false, animation:false, scales:{ y:{ beginAtZero:true } }, plugins:{ legend:{ display:false } } }
-    });
-  } catch (err) { console.error(err); alert('Failed loading reports'); }
+function renderExpandedChart(chartType, data) {
+    const canvas = document.getElementById('expandedChart');
+    const ctx = canvas.getContext('2d');
+    
+    if (expandedChart) {
+        expandedChart.destroy();
+    }
+    
+    let config = getChartConfig(chartType, data);
+    
+    // Enhanced options for expanded chart
+    config.options.responsive = true;
+    config.options.maintainAspectRatio = false;
+    
+    // Add horizontal scrolling for charts with many data points
+    if (data.labels && data.labels.length > 15) {
+        canvas.style.minWidth = Math.max(800, data.labels.length * 50) + 'px';
+    }
+    
+    expandedChart = new Chart(ctx, config);
 }
 
-/* --- Expand modal logic --- */
-let activeChartKey = null;
-function openExpanded(btn) {
-  const key = btn.getAttribute('data-chart');
-  activeChartKey = key;
-  document.getElementById('chartModal').classList.remove('hidden');
-  document.getElementById('chartModal').classList.add('flex');
-  document.getElementById('expandedTitle').textContent = {
-    userGrowth: 'User Growth Trend',
-    dau: 'Daily Active Users',
-    postEngagement: 'Post Engagement',
-    topPosts: 'Top Posts',
-    categories: 'Category Breakdown',
-    reports: 'Reports'
-  }[key] || 'Chart';
-  // populate modal dates from small controls if present
-  const mapPref = { userGrowth: 'ug', dau:'dau', postEngagement:'pe', topPosts:'tp', categories:'cat', reports:'r' };
-  const pref = mapPref[key];
-  const s = document.getElementById(pref + '_start')?.value || daysAgoISO(6);
-  const e = document.getElementById(pref + '_end')?.value || todayISO();
-  document.getElementById('exp_start').value = s;
-  document.getElementById('exp_end').value = e;
-
-  // initial load into expanded canvas
-  updateExpandedChart();
+function validateDateRange(startDate, endDate) {
+    hideError();
+    
+    if (!startDate || !endDate) {
+        showError('Please select both start and end dates.');
+        return false;
+    }
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const today = new Date();
+    
+    if (start > end) {
+        showError('Start date must be before end date.');
+        return false;
+    }
+    
+    if (end > today) {
+        showError('End date cannot be in the future.');
+        return false;
+    }
+    
+    const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+    if (daysDiff > 365) {
+        showError('Date range cannot exceed 365 days.');
+        return false;
+    }
+    
+    return true;
 }
 
-function closeModal() {
-  document.getElementById('chartModal').classList.add('hidden');
-  document.getElementById('chartModal').classList.remove('flex');
-  // destroy expanded chart if exists
-  if (INSTANCES['expanded']) { INSTANCES['expanded'].destroy(); INSTANCES['expanded'] = null; }
+function showError(message) {
+    const errorDiv = document.getElementById('dateError');
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('hidden');
 }
 
-document.getElementById('exp_fetch').addEventListener('click', updateExpandedChart);
-
-async function updateExpandedChart() {
-  const start = document.getElementById('exp_start').value;
-  const end = document.getElementById('exp_end').value;
-  const key = activeChartKey;
-  if (!key) return;
-  // call respective loader with expanded canvas id
-  const mapLoader = {
-    userGrowth: loadUserGrowth,
-    dau: loadDAU,
-    postEngagement: loadPostEngagement,
-    topPosts: loadTopPosts,
-    categories: loadCategories,
-    reports: loadReports
-  };
-  const loader = mapLoader[key];
-  if (!loader) return;
-  // render into expanded canvas (id expandedCanvas)
-  await loader(start, end, 'expandedCanvas');
-  // move expanded instance to INSTANCES['expanded'] for consistent cleanup
-  if (INSTANCES['expanded']) INSTANCES['expanded'].destroy();
-  INSTANCES['expanded'] = INSTANCES['expandedCanvas'] || INSTANCES['expandedCanvas'] === undefined ? INSTANCES['expandedCanvas'] : INSTANCES['expandedCanvas'];
-  // note: loaders create chart instance keyed by the canvasId; loader returns no instance; but INSTANCES[...] keys are set inside loader using canvasId
-  // ensure we remap the created instance to 'expanded'
-  // find the instance created for 'expandedCanvas' and remap
-  if (INSTANCES['expandedCanvas']) {
-    INSTANCES['expanded'] = INSTANCES['expandedCanvas'];
-    delete INSTANCES['expandedCanvas'];
-  }
+function hideError() {
+    const errorDiv = document.getElementById('dateError');
+    errorDiv.classList.add('hidden');
 }
-
-/* --- Wire small Fetch buttons --- */
-document.getElementById('ug_fetch').addEventListener('click', () => loadUserGrowth(document.getElementById('ug_start').value, document.getElementById('ug_end').value));
-document.getElementById('dau_fetch').addEventListener('click', () => loadDAU(document.getElementById('dau_start').value, document.getElementById('dau_end').value));
-document.getElementById('pe_fetch').addEventListener('click', () => loadPostEngagement(document.getElementById('pe_start').value, document.getElementById('pe_end').value));
-document.getElementById('tp_fetch').addEventListener('click', () => loadTopPosts(document.getElementById('tp_start').value, document.getElementById('tp_end').value));
-document.getElementById('cat_fetch').addEventListener('click', () => loadCategories(document.getElementById('cat_start').value, document.getElementById('cat_end').value));
-document.getElementById('r_fetch').addEventListener('click', () => loadReports(document.getElementById('r_start').value, document.getElementById('r_end').value));
-
-/* --- Initial load (defaults last 7 days) --- */
-async function fetchAllCharts() {
-  const start = daysAgoISO(6), end = todayISO();
-  await Promise.all([
-    loadUserGrowth(start, end),
-    loadDAU(start, end),
-    loadPostEngagement(start, end),
-    loadTopPosts(start, end),
-    loadCategories(start, end),
-    loadReports(start, end)
-  ]);
-}
-fetchAllCharts();
-
 </script>
 {% endblock %}

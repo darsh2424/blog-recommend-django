@@ -7,23 +7,27 @@ from django.urls import reverse
 from django.core.cache import cache
 from django.contrib import messages
 from datetime import datetime, timedelta
-from django.db.models import F,Sum,Q,Count
-import pycountry
+from django.db.models import Count, Q, F, ExpressionWrapper, FloatField
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse, HttpResponseRedirect
+from blog.models import Post, Category, Comment, CommentReply
+from users.models import UserProfile, PostInteraction, UserPostActivity, User, PostReport
+from recommend.utils import (
+    get_user_recommendations,
+    get_trending_posts
+)
 import os
 from pathlib import Path
 import requests
-from django.utils.text import slugify  
-from blog.models import Post, Category, Comment, CommentReply
-from users.models import User, UserProfile, UserPostActivity, PostInteraction
-from recommend.utils import get_user_recommendations, get_trending_posts_by_score
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import csrf_exempt
 import json
-from django.views.decorators.http import require_POST
-from django.http import JsonResponse,HttpResponseRedirect
+from django.utils.text import slugify
+import time
+import cloudinary
 
-def paginate(request, queryset, per_page=9):
-    paginator = Paginator(queryset, per_page)
+def paginate(request, items, per_page=9):
+    """Optimized pagination with prefetch"""
+    paginator = Paginator(items, per_page)
     page = request.GET.get('page')
     return paginator.get_page(page)
 
@@ -40,118 +44,121 @@ def get_user_and_profile(session):
         del session['user_id']
         return None, None
 
-
 def index(request):
-    category_post_map = cache.get('trending_category_map')
-
-    if not category_post_map:
-        today = now().date()
-        week_ago = today - timedelta(days=7)
+        categories = Category.objects.all().order_by('name')
+        category_post_map = []
         
-        # Get posts with annotated interaction counts
-        recent_posts = Post.objects.filter(
-            created_at__date__range=(week_ago, today)
-        ).annotate(
-            ann_view_count=Count('interactions', filter=Q(interactions__viewed=True)),
-            ann_like_count=Count('interactions', filter=Q(interactions__liked=True)),
-            ann_comment_count=Count('comments')
-        )
-
-
-        category_scores = {}
-        category_posts = {}
-
-        for post in recent_posts:
-            days_old = max((today - post.created_at.date()).days, 1)
-            # Calculate score using the annotated counts
-            score = (post.ann_view_count + post.ann_like_count * 2 + post.ann_comment_count * 1.5) / days_old
-            cid = post.category_id
-
-            category_scores.setdefault(cid, []).append(score)
-            category_posts.setdefault(cid, []).append((score, post))
-
-        # Get all categories in one query
-        categories = Category.objects.in_bulk(category_scores.keys())
-
-        category_avg = [
-            (sum(scores) / len(scores), categories[cid])
-            for cid, scores in category_scores.items()
-            if scores  # Ensure we don't divide by zero
-        ]
-
-        sorted_categories = sorted(category_avg, key=lambda x: x[0], reverse=True)
-
-        category_post_map = [
-            (cat, [p[1] for p in sorted(category_posts[cat.id], key=lambda x: x[0], reverse=True)[:3]])
-            for _, cat in sorted_categories
-        ]
-
-        cache.set('trending_category_map', category_post_map, timeout=10800)
-
-    # Handle user session and profile checks
-    user, profile = get_user_and_profile(request.session)
-    categories = Category.objects.all().order_by('name')
-
-    if user:
-        if not user.username:
-            return redirect('profile_dtl')
-        if not all([profile.gender, profile.birth_date, profile.location]):
-            return redirect('other_dtl')
-        if profile.category_preferences.count() < 3:
-            return redirect('interest_selection')
+        for cat in categories:
+            # First try with strict trending criteria
+            posts = get_trending_posts(category=cat, days=7, top_n=3)
+            
+            # If empty, relax the requirements
+            if not posts.exists():
+                posts = get_trending_posts(category=cat, days=30, top_n=3)
+            
+            if posts.exists():
+                category_post_map.append((cat, posts))
+        
+        context = {
+            'category_post_map': category_post_map,
+            'categories': categories,
+            'user': request.user if request.user.is_authenticated else None
+        }
     
-    return render(request, 'index.html', {
-        'category_post_map': category_post_map,
-        'categories': categories,
-        'user': user if user else None
-    })
-
+        # User onboarding checks
+        if request.user.is_authenticated:
+            profile = request.user.profile
+            if not request.user.username:
+                return redirect('profile_dtl')
+            if not all([profile.gender, profile.birth_date, profile.location]):
+                return redirect('other_dtl')
+            if profile.category_preferences.count() < 3:
+                return redirect('interest_selection')
+        
+        return render(request, 'index.html', context)
 
 def trending_category_view(request, category_slug):
-    category = get_object_or_404(Category, name__iexact=category_slug.replace('-', ' '))
+    category = get_object_or_404(Category, name__iexact=category_slug)
     
     # Updated to use the utility function with annotations
-    posts = get_trending_posts_by_score(category=category, days=7)
-    page_obj = paginate(request, posts, per_page=9)
+    # posts = get_trending_posts(category=category, days=7)
+
+    posts = get_trending_posts(category=category, days=7)
+            
+    if not posts.exists():
+        posts = get_trending_posts(category=category, days=30)
+            
+
+    # page_obj = paginate(request, category_post_map, per_page=9)
     categories = Category.objects.all().order_by('name')
 
     return render(request, 'trending_category.html', {
         'category': category,
-        'page_obj': page_obj,
-        'categories': categories,
+        'page_obj': paginate(request, posts),
+        'categories': Category.objects.all().order_by('name')
     })
 
+@login_required
 def for_you_view(request):
-    if not request.user.is_authenticated:
-        return redirect('/')
-    
     user = request.user
-    profile = getattr(user, 'profile', None)
+    profile = user.profile
     selected_tab = request.GET.get('tab', 'for_you')
+    start_time = time.time()
 
-    interest_categories = []
-    if profile and profile.category_preferences.exists():
-        interest_categories = list(profile.category_preferences.all().order_by('name'))
+    fallback_posts = cache.get(f'user_fallback_{user.id}')
+    if not fallback_posts:
+        fallback_posts = Post.objects.order_by('-created_at')[:30]
+        cache.set(f'user_fallback_{user.id}', fallback_posts, 86400)
 
     if selected_tab == 'for_you':
-        # This already uses the updated recommendation system
-        posts = get_user_recommendations(user, top_n=30)
+        try:
+            posts = get_user_recommendations(user, top_n=30)
+            elapsed = time.time() - start_time
+
+            # Use last known good recommendation if current took too long
+            if elapsed > 2.0:
+                print(f"⚠️ Recommender slow ({elapsed:.2f}s), using cache fallback.")
+                posts = cache.get(f'user_recs_{user.id}_cached', fallback_posts)
+        except Exception as e:
+            print(f"🛑 Recommendation error: {str(e)}")
+            posts = fallback_posts
+
+        # Save for next time (if successful)
+        if posts:
+            cache.set(f'user_recs_{user.id}_cached', posts, 1800)
+
     else:
+        # Handle category-based tab
+        cache_key = f'user_categories_{user.id}'
+        categories = cache.get(cache_key)
+
+        if not categories:
+            categories = list(profile.category_preferences.all().order_by('name'))
+            cache.set(cache_key, categories, 3600)
+
         category = next(
-            (c for c in interest_categories if slugify(c.name) == selected_tab),
+            (c for c in categories if slugify(c.name.lower()) == selected_tab.lower()), 
             None
         )
-        if category:
-            posts = get_trending_posts_by_score(category=category, days=7)
-        else:
-            posts = []
 
-    page_obj = paginate(request, posts, per_page=9)
+        if category:
+            posts = get_trending_posts(category=category, days=7)
+            if not posts.exists():
+                posts = cache.get(f'category_posts_{category.id}')
+                if not posts:
+                    posts = Post.objects.filter(category=category).order_by('-created_at')[:30]
+                    cache.set(f'category_posts_{category.id}', posts, 3600)
+        else:
+            posts = Post.objects.none()
+
+    # Ensure always fallback-ready
+    if not posts or not posts.exists():
+        posts = fallback_posts
 
     return render(request, 'for_you.html', {
-        'page_obj': page_obj,
+        'page_obj': paginate(request, posts),
         'selected_tab': selected_tab,
-        'interest_categories': interest_categories,
+        'interest_categories': profile.category_preferences.all().order_by('name')
     })
 
 
@@ -213,41 +220,22 @@ def follow_unfollow_user(request, username):
     return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
 
 def user_profile_view(request, username):
+    """Optimized profile view with counts"""
     user = get_object_or_404(User, username=username)
-
-    # Get all posts by this user
     posts = Post.objects.filter(user=user).order_by('-created_at')
-
-    # Dynamic stats
-    total_blogs = posts.count()
-    total_likes = PostInteraction.objects.filter(post__in=posts, liked=True).count()
-
-    # Fallback avatar (letter-based)
-    profile_picture = user.profile.profile_picture
-    if not profile_picture:
-        first_letter = user.username[0].upper() if user.username else "U"
-        profile_picture = f"https://ui-avatars.com/api/?name={first_letter}&background=0D8ABC&color=fff&size=128"
-
-    # Pagination
-    page_obj = paginate(request, posts, per_page=6)
-
-    is_following = False
     
-    if request.user.is_authenticated and request.user != user:
-        is_following = request.user.profile.is_following(user.profile)
+    # Single query for all counts
+    stats = posts.aggregate(
+        total_blogs=Count('id'),
+        total_likes=Count('interactions', filter=Q(interactions__liked=True))
+    )
     
-    categories=Category.objects.all().order_by('name')
     return render(request, 'user_profile.html', {
         'profile_user': user,
-        'is_following': is_following,
-        'page_obj': page_obj,
-        'total_blogs': total_blogs,
-        'total_likes': total_likes,
-        'profile_picture': profile_picture,
-        'categories':categories
+        'page_obj': paginate(request, posts, 6),
+        'is_following': request.user.profile.is_following(user.profile) if request.user.is_authenticated else False,
+        **stats
     })
-
-
 
 def post_detail_view(request, post_id):
     categories = Category.objects.all().order_by('name')
@@ -320,16 +308,25 @@ def profile_dtl(request):
             changed = True
 
         if profile_picture and hasattr(profile_picture, 'name') and profile_picture.name.strip():
-            filename = f"{user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
-            relative_path = os.path.join('images', 'users_profile_pic', filename)
-            absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+            # filename = f"{user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.jpg"
+            # relative_path = os.path.join('images', 'users_profile_pic', filename)
+            # absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
 
-            os.makedirs(os.path.dirname(absolute_path), exist_ok=True)
-            with open(absolute_path, 'wb+') as dest:
-                for chunk in profile_picture.chunks():
-                    dest.write(chunk)
+            # os.makedirs(os.path.dirname(absolute_path), exist_ok=True)
+            # with open(absolute_path, 'wb+') as dest:
+            #     for chunk in profile_picture.chunks():
+            #         dest.write(chunk)
 
-            profile.profile_picture = os.path.join('images', 'users_profile_pic', filename).replace('\\', '/')
+            # profile.profile_picture = os.path.join('images', 'users_profile_pic', filename).replace('\\', '/')
+            # changed = True
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    profile_picture,
+                    folder="blognest_profile_pictures"
+                )
+                profile.profile_picture = upload_result['secure_url']
+            except Exception as e:
+                messages.error(request, f"Error uploading profile picture: {str(e)}")
             changed = True
 
         if changed:
@@ -364,21 +361,17 @@ def other_dtl(request):
         profile.save()
         return redirect('interest_selection')
     
-    categories = Category.objects.all().order_by('name')
 
     return render(request, 'newUserOtherDtl.html', {
         'user': user,
         'profile': profile,
         'countries': countries,
-        'categories':categories
     })
 
 def interest_selection_view(request):
     user, profile = get_user_and_profile(request.session)
     if not user:
         return redirect('/')
-
-    categories = Category.objects.all().order_by('name')
 
     if request.method == 'POST':
         selected_ids = request.POST.getlist('categories')
@@ -391,7 +384,6 @@ def interest_selection_view(request):
         
     return render(request, 'interest_selection.html', {
         'user': user,
-        'categories': categories,
         'selected_ids': profile.category_preferences.values_list('id', flat=True),
     })
 
@@ -451,7 +443,7 @@ reject if the content doesn't match the category's technical focus.
         
         try:
             moderation_data = json.loads(moderation)
-            print(moderation_data)
+            # print(moderation_data)
             if moderation_data.get('relevance_score', 0) >= 40:
                 return "APPROVED", moderation_data.get('reason', 'Content meets requirements')
             return f"REJECTED", {moderation_data.get('reason', 'Not relevant enough')}
@@ -467,7 +459,6 @@ reject if the content doesn't match the category's technical focus.
         return "REJECTED: Moderation system error", str(e)
 
 @login_required
-@csrf_exempt
 def write_post_view(request):
     user = request.user
     categories = Category.objects.all()
@@ -525,15 +516,14 @@ def write_post_view(request):
                     'selected_category': category.id
                 })
             try:
-                ext = Path(image.name).suffix
-                filename = f"{user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
-                path = os.path.join('images', 'blogs', filename)
-                full_path = os.path.join(settings.MEDIA_ROOT, path)
-                os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                with open(full_path, 'wb+') as f:
-                    for chunk in image.chunks():
-                        f.write(chunk)
-                image_url = os.path.join('images', 'blogs', filename).replace("\\", "/")
+                # result = cloudinary.uploader.upload(image)
+                # post.image_url = result['secure_url']
+                upload_result = cloudinary.uploader.upload(
+                    image,
+                    folder="blognest_images"  
+                )
+                image_url = upload_result['secure_url']
+                
 
             except Exception as e:
                 messages.error(request, f"Error saving image: {str(e)}")
@@ -565,6 +555,7 @@ def write_post_view(request):
             messages.error(request, f"Error saving blog: {str(e)}")
         
     return render(request, 'write_post.html', {'categories': categories})
+
 
 @login_required
 def edit_post_view(request, post_id):
@@ -662,23 +653,28 @@ def edit_post_view(request, post_id):
                 })
                 
             try:
-                ext = Path(image.name).suffix
-                filename = f"{request.user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
-                path = os.path.join('images', 'blogs', filename)
-                full_path = os.path.join(settings.MEDIA_ROOT, path)
+                # ext = Path(image.name).suffix
+                # filename = f"{request.user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
+                # path = os.path.join('images', 'blogs', filename)
+                # full_path = os.path.join(settings.MEDIA_ROOT, path)
                 
-                os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                with open(full_path, 'wb+') as f:
-                    for chunk in image.chunks():
-                        f.write(chunk)
+                # os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                # with open(full_path, 'wb+') as f:
+                #     for chunk in image.chunks():
+                #         f.write(chunk)
                 
-                # Delete old image if exists
-                if post.image_url:
-                    old_path = os.path.join(settings.MEDIA_ROOT, post.image_url)
-                    if os.path.exists(old_path):
-                        os.remove(old_path)
+                # # Delete old image if exists
+                # if post.image_url:
+                #     old_path = os.path.join(settings.MEDIA_ROOT, post.image_url)
+                #     if os.path.exists(old_path):
+                #         os.remove(old_path)
                 
-                image_url = os.path.join('images', 'blogs', filename).replace("\\", "/")
+                # image_url = os.path.join('images', 'blogs', filename).replace("\\", "/")
+                upload_result = cloudinary.uploader.upload(
+                    image,
+                    folder="blognest_images"  
+                )
+                image_url = upload_result['secure_url']
             except Exception as e:
                 messages.error(request, f"Error saving image: {str(e)}")
                 return render(request, 'write_post.html', {
@@ -741,11 +737,19 @@ def delete_post_view(request, post_id):
         )
         
         # Delete image if exists
-        if post.image_url:
-            image_path = os.path.join(settings.MEDIA_ROOT, post.image_url)
-            if os.path.exists(image_path):
-                os.remove(image_path)
-        
+        # if post.image_url:
+        #     image_path = os.path.join(settings.MEDIA_ROOT, post.image_url)
+        #     if os.path.exists(image_path):
+        #         os.remove(image_path)
+        if post.image_url and 'res.cloudinary.com' in post.image_url:
+            try:
+                # Extract public_id from URL
+                public_id = post.image_url.split('/')[-1].split('.')[0]
+                cloudinary.uploader.destroy(public_id)
+            except Exception as e:
+                # Log the error but continue with post deletion
+                print(f"Error deleting Cloudinary image: {str(e)}")
+                
         post.delete()
         # messages.success(request, "Post deleted successfully!")
         return redirect('user_profile', username=request.user.username)
@@ -758,14 +762,19 @@ def delete_post_view(request, post_id):
 @login_required
 def toggle_like(request, post_id):
     post = get_object_or_404(Post, id=post_id)
-    interaction, created = PostInteraction.objects.get_or_create(user=request.user, post=post)
+    interaction, created = PostInteraction.objects.get_or_create(
+        user=request.user, 
+        post=post
+    )
     
+    # Toggle the like status
     interaction.liked = not interaction.liked
     interaction.save()
 
+    # Return the fresh count from the database
     return JsonResponse({
         'status': 'liked' if interaction.liked else 'unliked',
-        'like_count': post.like_count
+        'like_count': post.like_count  # Using the property
     })
 
 @require_POST
@@ -792,11 +801,9 @@ def toggle_save(request, post_id):
 @login_required
 def saved_posts_view(request):
     posts = request.user.profile.saved_posts.order_by('-created_at')
-    categories = Category.objects.all().order_by('name')
 
     return render(request, 'saved_post.html', {
         'posts': posts,
-        'categories': categories,
     })
 
 @login_required
@@ -804,11 +811,8 @@ def liked_posts_view(request):
     interactions = PostInteraction.objects.filter(user=request.user, liked=True).select_related('post').order_by('-timestamp')
     liked_posts = [interaction.post for interaction in interactions]
 
-    categories = Category.objects.all().order_by('name')
-
     return render(request, 'liked_posts.html', {
         'posts': liked_posts,
-        'categories': categories,
     })
 
 @login_required
@@ -907,3 +911,26 @@ def delete_reply(request, reply_id):
     return HttpResponseRedirect(
         reverse('post_detail', args=[reply.comment.post.id]) + f'#comment-{reply.comment.id}'
     )
+
+@require_POST
+@login_required
+def report_post(request, post_id):
+    try:
+        post = Post.objects.get(id=post_id)
+        reason = request.POST.get("reason")
+
+        if not reason:
+            return JsonResponse({"success": False, "message": "Reason required."}, status=400)
+
+        # Prevent duplicate reports by same user on same post
+        report, created = PostReport.objects.get_or_create(
+            post=post, user=request.user, defaults={"reason": reason}
+        )
+
+        if not created:
+            return JsonResponse({"success": False, "message": "You already reported this post."})
+
+        return JsonResponse({"success": True, "message": "Report submitted successfully."})
+
+    except Post.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Post not found."}, status=404)

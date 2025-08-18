@@ -53,7 +53,7 @@ class UserProfile(models.Model):
     location = models.CharField(max_length=100, blank=True, null=True)
     profile_picture = models.URLField(blank=True, null=True)
     followed_users = models.ManyToManyField("self", blank=True, symmetrical=False)
-    category_preferences = models.ManyToManyField("blog.Category", blank=True)
+    category_preferences = models.ManyToManyField("blog.Category", blank=True, related_name='preferred_by_users')
     saved_posts = models.ManyToManyField("blog.Post", blank=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
 
@@ -108,6 +108,11 @@ class PostInteraction(models.Model):
 
     class Meta:
         unique_together = ('user', 'post')  
+        indexes = [
+            models.Index(fields=['post', 'viewed']),
+            models.Index(fields=['post', 'liked']),
+            models.Index(fields=['user', 'liked']),
+        ]
 
 class UserPostActivity(models.Model):
     ACTION_CHOICES = [
@@ -135,3 +140,24 @@ class UserPostActivity(models.Model):
     class Meta:
         verbose_name_plural = "User Post Activities"
 
+class PostReport(models.Model):
+    REASON_CHOICES = [
+        ('spam', 'Spam Content'),
+        ('inappropriate', 'Inappropriate Content'),
+        ('harassment', 'Harassment'),
+        ('fake_news', 'Fake News/Misinformation'),
+        ('copyright', 'Copyright Violation'),
+        ('violence', 'Violence/Threats'),
+        ('adult', 'Adult Content'),
+        ('hate_speech', 'Hate Speech'),
+        ('other', 'Other')
+    ]
+    
+    post = models.ForeignKey("blog.Post", on_delete=models.CASCADE, related_name="admin_reports")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="filed_reports")
+    reason = models.CharField(max_length=20, choices=REASON_CHOICES)
+    reported_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Report: {self.post.title[:30]} - {self.get_reason_display()}"
+    

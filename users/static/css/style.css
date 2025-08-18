@@ -6,7 +6,7 @@ body {
 #scrollTopBtn {
   display: none;
   position: fixed;
-  bottom: 30px;
+  bottom: 80px;
   right: 30px;
   z-index: 999;
   padding: 12px 15px;

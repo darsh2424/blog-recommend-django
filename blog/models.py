@@ -5,6 +5,11 @@ from users.models import User
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['name']),
+        ]
+
     def __str__(self):
         return self.name
 
@@ -76,3 +81,4 @@ class PostReport(models.Model):
 
     def __str__(self):
         return f"Report on {self.post.title} by {self.user.username}"
+
