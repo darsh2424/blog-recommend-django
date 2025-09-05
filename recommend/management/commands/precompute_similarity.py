@@ -7,7 +7,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from datetime import timedelta
 from django.utils.timezone import now
-
+from blog.models import Post
 def calculate_similarity(force_update=False):
     """Optimized similarity calculation with caching"""
     cache_key = "similarity_data"

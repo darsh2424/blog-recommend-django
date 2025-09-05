@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from django.utils.timezone import now
 from django.urls import reverse
 from django.core.cache import cache
+import pycountry
 from django.contrib import messages
 from datetime import datetime, timedelta
 from django.db.models import Count, Q, F, ExpressionWrapper, FloatField
@@ -112,10 +113,12 @@ def trending_category_view(request, category_slug):
         'categories': Category.objects.all().order_by('name')
     })
 
-@login_required
 def for_you_view(request):
     user = request.user
     profile = get_profile_or_none(user)
+    page_obj=None
+    if not request.user.is_authenticated:
+        return redirect('/')
     if not profile:
         return redirect('/')
 
@@ -123,11 +126,11 @@ def for_you_view(request):
 
     if selected_tab == 'for_you':
         try:
-            posts = get_user_recommendations(user, top_n=30)
+            posts = get_user_recommendations(user, top_n=10)
         except Exception as e:
             print(f"🛑 Recommendation error: {str(e)}")
             posts = Post.objects.filter(is_suspended=False).order_by('-created_at')[:30]
-
+        page_obj=posts
     else:
         categories = list(profile.category_preferences.all().order_by('name'))
         category = next(
@@ -138,12 +141,17 @@ def for_you_view(request):
         if category:
             posts = get_trending_posts(category=category, days=7)
             if not posts.exists():
+                posts = get_trending_posts(category=category, days=30)
+            if not posts.exists():
+                posts = get_trending_posts(category=category, days=None)
+            if not posts.exists():
                 posts = Post.objects.filter(category=category).order_by('-created_at')[:30]
         else:
             posts = Post.objects.none()
+        page_obj=paginate(request, posts)
 
     return render(request, 'for_you.html', {
-        'page_obj': paginate(request, posts),
+        'page_obj': page_obj,
         'selected_tab': selected_tab,
         'interest_categories': profile.category_preferences.all().order_by('name')
     })
@@ -382,8 +390,10 @@ def interest_selection_view(request):
             profile.save()
             return redirect('/')
         
+    categories = Category.objects.all().order_by('name')
     return render(request, 'interest_selection.html', {
         'user': user,
+        'categories': categories,
         'selected_ids': profile.category_preferences.values_list('id', flat=True),
     })
 

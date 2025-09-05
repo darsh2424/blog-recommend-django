@@ -34,6 +34,11 @@
                     <i class="fas fa-dashboard"></i>
                     MIS Dashboard
                 </a>
+                <a href="{% url 'recommendations_dashboard' %}" 
+                   class="{% if active_section == 'recommendations' %}border-blue-500 text-blue-600{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2">
+                    <i class="fas fa-chart-bar"></i>
+                    Recommendations
+                </a>
                 <a href="{% url 'manage_categories' %}" 
                    class="{% if active_section == 'categories' %}border-blue-500 text-blue-600{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2">
                     <i class="fas fa-tags"></i>
@@ -50,8 +55,18 @@
                     Users
                 </a>
             </nav>
+            <div class="flex flex-wrap gap-4 max-w-7xl my-5 px-4 sm:px-6 lg:px-2">
+                <a href="{% url 'trigger_admin_task' 'aggregation' %}" 
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded">Run Aggregation</a>
+                
+                <a href="{% url 'trigger_admin_task' 'similarity' %}" 
+                class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-1 rounded">Recalculate Similarity</a>
+            </div>
         </div>
     </div>
+
+        
+    
 
     <!-- Messages -->
     {% if messages %}

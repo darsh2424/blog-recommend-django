@@ -12,6 +12,12 @@ from blog.models import Post, Category, Comment
 from users.models import User, UserProfile, PostInteraction, UserPostActivity,PostReport
 from django.core.paginator import Paginator
 from functools import wraps
+from blog.models import RecommendationStats, RecommendationLog
+from django.utils.dateparse import parse_date
+from .models import AdminTaskLog
+from recommend.management.commands.aggregate_recommendations import aggregate_recommendations
+from recommend.management.commands.cache_trending_categories import Command as TrendingCommand
+from recommend.management.commands.precompute_similarity import calculate_similarity 
 
 def is_admin(user):
     """Check if user is staff/admin"""
@@ -583,3 +589,272 @@ def suspend_user(request, user_id):
             messages.error(request, 'Invalid confirmation text!')
             
     return redirect('manage_users')
+
+@admin_required
+def recommendations_dashboard(request):
+    """Render the Recommendation Dashboard page"""
+    return render(request, "admin_management/recommendations_dashboard.html")
+
+def get_recommendation_summary_stats(start_date, end_date):
+    """Get summary statistics for the KPI cards"""
+    stats = RecommendationStats.objects.filter(
+        date__gte=start_date, 
+        date__lte=end_date
+    ).aggregate(
+        total_recommendations=Sum('count'),
+        total_clicks=Sum('click_count'),
+        total_engagements=Sum('engage_count')
+    )
+    
+    total_recs = stats['total_recommendations'] or 0
+    total_clicks = stats['total_clicks'] or 0
+    total_engagements = stats['total_engagements'] or 0
+    
+    ctr = (total_clicks / total_recs * 100) if total_recs > 0 else 0
+    er = (total_engagements / total_recs * 100) if total_recs > 0 else 0
+    bounce_rate = 100 - ctr
+    
+    return {
+        'total_recommendations': total_recs,
+        'ctr': round(ctr, 2),
+        'engagement_rate': round(er, 2),
+        'bounce_rate': round(bounce_rate, 2)
+    }
+
+def get_recommendation_chart_data(request):
+    """Serve chart data for dashboard (AJAX)"""
+    chart_type = request.GET.get("chart_type")
+    start_date_str = request.GET.get("start_date")
+    end_date_str = request.GET.get("end_date")
+    group_by = request.GET.get("group_by", "day")
+    
+    # Validate dates
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
+    
+    if start_date > end_date:
+        return JsonResponse({"error": "Start date cannot be after end date."}, status=400)
+    
+    if chart_type == "rec_ctr":
+        data = get_recommendation_ctr_data(start_date, end_date, group_by)
+    elif chart_type == "rec_engagement":
+        data = get_recommendation_engagement_data(start_date, end_date, group_by)
+    elif chart_type == "rec_fairness":
+        data = get_recommendation_fairness_data(start_date, end_date)
+    elif chart_type == "rec_tier":
+        data = get_recommendation_tier_effectiveness(start_date, end_date)
+    elif chart_type == "rec_category":
+        data = get_recommendation_category_data(start_date, end_date)
+    elif chart_type == "rec_summary":
+        data = get_recommendation_summary_stats(start_date, end_date)
+    else:
+        return JsonResponse({"error": "Invalid chart type"}, status=400)
+
+    return JsonResponse(data)
+
+def get_recommendation_ctr_data(start_date, end_date, group_by):
+    """CTR over time - improved with error handling"""
+    labels, ctr_data = [], []
+    current_date = start_date
+
+    while current_date <= end_date:
+        if group_by == 'day':
+            next_date = current_date + timedelta(days=1)
+            label = current_date.strftime('%m/%d')
+        elif group_by == 'week':
+            next_date = current_date + timedelta(days=7)
+            label = f"Week {current_date.strftime('%U')}"
+        else:
+            next_date = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+            label = current_date.strftime('%b %Y')
+
+        stats = RecommendationStats.objects.filter(
+            date__gte=current_date,
+            date__lt=next_date
+        ).aggregate(total=Sum("count"), clicks=Sum("click_count"))
+
+        total = stats["total"] or 0
+        clicks = stats["clicks"] or 0
+        ctr = (clicks / total * 100) if total > 0 else 0
+
+        labels.append(label)
+        ctr_data.append(round(ctr, 2))
+        current_date = next_date
+
+    return {
+        "labels": labels,
+        "datasets": [{
+            "label": "CTR (%)",
+            "data": ctr_data,
+            "borderColor": "rgb(59,130,246)",
+            "backgroundColor": "rgba(59,130,246,0.1)"
+        }]
+    }
+
+def get_recommendation_category_data(start_date, end_date):
+    """Get recommendation distribution by category - using existing models"""
+    distribution = (
+        RecommendationLog.objects.filter(
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date
+        )
+        .values('post__category__name')  
+        .annotate(total=Count('id'))
+        .order_by('-total')
+    )
+    
+    labels = [item['post__category__name'] for item in distribution if item['post__category__name']]
+    data = [item['total'] for item in distribution if item['post__category__name']]
+    
+    return {
+        "labels": labels,
+        "datasets": [{
+            "label": "Recommendations by Category",
+            "data": data,
+            "backgroundColor": [
+                "#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", 
+                "#9966FF", "#FF9F40", "#8dd1e1", "#d084d0", 
+                "#87ceeb", "#dda0dd"
+            ][:len(labels)]
+        }]
+    }
+
+
+def get_recommendation_engagement_data(start_date, end_date, group_by):
+    """Engagement Rate over time - improved with error handling"""
+    labels, er_data = [], []
+    current_date = start_date
+
+    while current_date <= end_date:
+        if group_by == 'day':
+            next_date = current_date + timedelta(days=1)
+            label = current_date.strftime('%m/%d')
+        elif group_by == 'week':
+            next_date = current_date + timedelta(days=7)
+            label = f"Week {current_date.strftime('%U')}"
+        else:
+            next_date = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+            label = current_date.strftime('%b %Y')
+
+        stats = RecommendationStats.objects.filter(
+            date__gte=current_date,
+            date__lt=next_date
+        ).aggregate(total=Sum("count"), engages=Sum("engage_count"))
+
+        total = stats["total"] or 0
+        engages = stats["engages"] or 0
+        er = (engages / total * 100) if total > 0 else 0
+
+        labels.append(label)
+        er_data.append(round(er, 2))
+        current_date = next_date
+
+    return {
+        "labels": labels,
+        "datasets": [{
+            "label": "Engagement Rate (%)",
+            "data": er_data,
+            "borderColor": "rgb(34,197,94)",
+            "backgroundColor": "rgba(34,197,94,0.1)"
+        }]
+    }
+
+
+def get_recommendation_fairness_data(start_date, end_date):
+    """Distribution fairness → recommendations per author"""
+    distribution = (
+        RecommendationLog.objects.filter(
+            created_at__date__gte=start_date,
+            created_at__date__lte=end_date
+        )
+        .values("post__user__username")
+        .annotate(total=Count("id"))
+        .order_by("-total")[:10]
+    )
+
+    labels = [row["post__user__username"] for row in distribution]
+    data = [row["total"] for row in distribution]
+
+    return {
+        "labels": labels,
+        "datasets": [{
+            "label": "Recommendations Share",
+            "data": data,
+            "backgroundColor": [
+                "#8884d8", "#82ca9d", "#ffc658", "#ff7c7c",
+                "#8dd1e1", "#d084d0", "#87ceeb", "#dda0dd",
+                "#98fb98", "#f0e68c"
+            ][:len(labels)]
+        }]
+    }
+
+
+def get_recommendation_tier_effectiveness(start_date, end_date):
+    """Tier effectiveness → CTR per tier"""
+    stats = (
+        RecommendationStats.objects.filter(date__gte=start_date, date__lte=end_date)
+        .values("tier")
+        .annotate(total=Sum("count"), clicks=Sum("click_count"), engages=Sum("engage_count"))
+    )
+
+    labels, ctrs, ers = [], [], []
+    tier_map = {1: "Exploration", 2: "Fresh/Trending", 3: "Engaged"}
+
+    for row in stats:
+        total = row["total"] or 0
+        clicks = row["clicks"] or 0
+        engages = row["engages"] or 0
+
+        ctr = (clicks / total * 100) if total > 0 else 0
+        er = (engages / total * 100) if total > 0 else 0
+
+        labels.append(tier_map.get(row["tier"], f"Tier {row['tier']}"))
+        ctrs.append(round(ctr, 2))
+        ers.append(round(er, 2))
+
+    return {
+        "labels": labels,
+        "datasets": [
+            {"label": "CTR (%)", "data": ctrs, "backgroundColor": "rgba(59,130,246,0.8)"},
+            {"label": "Engagement Rate (%)", "data": ers, "backgroundColor": "rgba(34,197,94,0.8)"}
+        ]
+    }
+    
+def trigger_admin_task(request, task):
+    try:
+        if task == "aggregation":
+            aggregate_recommendations()
+            msg = "✅ Aggregation & pruning completed."
+
+        elif task == "trending_cache":
+            TrendingCommand().handle()
+            msg = "✅ Trending cache refreshed."
+
+        elif task == "similarity":
+            calculate_similarity(force_update=True)
+            msg = "✅ Similarity recalculated & cached."
+
+        else:
+            msg = "⚠️ Invalid task"
+
+        AdminTaskLog.objects.create(
+            task_name=task,
+            status="success",
+            details=msg,
+            run_at=timezone.now()
+        )
+        messages.success(request, msg)
+
+    except Exception as e:
+        AdminTaskLog.objects.create(
+            task_name=task,
+            status="failed",
+            details=str(e),
+            run_at=timezone.now()
+        )
+        messages.error(request, f"❌ Task failed: {e}")
+
+    return redirect("recommendations_dashboard")

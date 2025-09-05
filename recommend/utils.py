@@ -67,7 +67,7 @@ def _calculate_trending_posts(category=None, days=7, top_n=10, require_interacti
     
     return qs[:top_n]
 
-def get_user_recommendations(user, top_n=10):
+def get_user_recommendations(user, top_n=10, repeat_after_hours=12):
 
     sim_matrix, index_map = load_similarity_data()
     if sim_matrix is None or index_map is None:
@@ -76,7 +76,18 @@ def get_user_recommendations(user, top_n=10):
     weighted_scores = defaultdict(float)
     liked_post_ids = set()
 
-    # --- Step 1: Feedback loop (CTR friendly) ---
+    # === Exclude posts already shown recently (unless engaged) ===
+    cutoff_time = timezone.now() - timedelta(hours=repeat_after_hours)
+    already_seen_ids = set(
+        RecommendationLog.objects.filter(
+            user=user,
+            created_at__gte=cutoff_time,   
+            clicked=False,
+            engaged=False
+        ).values_list("post_id", flat=True)
+    )
+
+    # --- Step 1: Feedback loop (Similarity-based CTR boost) ---
     interactions = PostInteraction.objects.filter(user=user, liked=True).select_related("post")
     for interaction in interactions:
         liked_post_ids.add(interaction.post.id)
@@ -92,11 +103,15 @@ def get_user_recommendations(user, top_n=10):
     for pid in liked_post_ids:
         weighted_scores.pop(pid, None)
 
-    top_similar_ids = sorted(weighted_scores, key=weighted_scores.get, reverse=True)[: top_n * 2]
+    top_similar_ids = [
+        pid for pid in sorted(weighted_scores, key=weighted_scores.get, reverse=True)
+        if pid not in already_seen_ids
+    ][: top_n * 2]
 
     # --- Step 2: Trending (popularity boost) ---
     trending_ids = list(
         Post.objects.filter(is_suspended=False)
+        .exclude(id__in=already_seen_ids)
         .annotate(
             likes=Count("interactions", filter=Q(interactions__liked=True)),
             views=Count("interactions", filter=Q(interactions__viewed=True)),
@@ -108,6 +123,7 @@ def get_user_recommendations(user, top_n=10):
     # --- Step 3: Freshness (new content boost) ---
     recent_ids = list(
         Post.objects.filter(is_suspended=False)
+        .exclude(id__in=already_seen_ids)
         .order_by("-created_at")
         .values_list("id", flat=True)[: top_n * 2]
     )
@@ -115,7 +131,7 @@ def get_user_recommendations(user, top_n=10):
     # --- Step 4: Profile category preference ---
     category_pref_ids = list(
         Post.objects.filter(category__in=user.profile.category_preferences.all(), is_suspended=False)
-        .exclude(id__in=top_similar_ids + trending_ids + recent_ids)
+        .exclude(id__in=already_seen_ids.union(set(top_similar_ids + trending_ids + recent_ids)))
         .order_by("-created_at")
         .values_list("id", flat=True)[: top_n * 2]
     )
@@ -123,25 +139,20 @@ def get_user_recommendations(user, top_n=10):
     # --- Step 5: Fallback cold start (exploration) ---
     fallback_ids = list(
         Post.objects.filter(is_suspended=False)
-        .exclude(id__in=top_similar_ids + trending_ids + recent_ids + category_pref_ids)
+        .exclude(id__in=already_seen_ids.union(set(top_similar_ids + trending_ids + recent_ids + category_pref_ids)))
         .order_by("?")
         .values_list("id", flat=True)[: top_n]
     )
 
     # --- Tiered blending with weights ---
-    # Tier 3 → Engaged/CTR-like (highest weight)
-    tier_3 = list(top_similar_ids)
-    # Tier 2 → Fresh content (recent + trending)
-    tier_2 = list(set(trending_ids + recent_ids))
-    # Tier 1 → Exploration (category + fallback)
-    tier_1 = list(set(category_pref_ids + fallback_ids))
+    tier_3 = list(top_similar_ids)  # Engaged/Similarity
+    tier_2 = list(set(trending_ids + recent_ids))  # Trending + Fresh
+    tier_1 = list(set(category_pref_ids + fallback_ids))  # Exploration
 
-    # Shuffle inside tiers (keeps feed dynamic)
     random.shuffle(tier_3)
     random.shuffle(tier_2)
     random.shuffle(tier_1)
 
-    # Merge tiers in weighted ratio (3:2:1 priority)
     combined = []
     tier_plan = [(tier_3, 3), (tier_2, 2), (tier_1, 1)]
     seen = set()
@@ -149,7 +160,7 @@ def get_user_recommendations(user, top_n=10):
     for tier_posts, weight in tier_plan:
         for pid in tier_posts:
             if pid not in seen:
-                combined.append((pid, weight))  # store weight along with post
+                combined.append((pid, weight))  # store with weight
                 seen.add(pid)
             if len(combined) >= top_n:
                 break
@@ -169,7 +180,7 @@ def get_user_recommendations(user, top_n=10):
         RecommendationLog.objects.create(
             user=user,
             post=post,
-            tier=weight_map.get(post.id, 1),  
+            tier=weight_map.get(post.id, 1),
         )
 
     return posts

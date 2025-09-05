@@ -14,4 +14,9 @@ urlpatterns = [
     path('posts/suspend/<int:post_id>/', views.suspend_post, name='suspend_post'),
     path('users/', views.manage_users, name='manage_users'),
     path('users/suspend/<int:user_id>/', views.suspend_user, name='suspend_user'),
+    
+    path("recommendations-dashboard/", views.recommendations_dashboard, name="recommendations_dashboard"),
+    path("recommendations-dashboard/data/", views.get_recommendation_chart_data, name="recommendation_chart_data"),
+    path("trigger-task/<str:task>/", views.trigger_admin_task, name="trigger_admin_task"),
+
 ]

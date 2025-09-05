@@ -110,13 +110,17 @@ class RecommendationLog(models.Model):
         default=1
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    clicked = models.BooleanField(default=False)   
+    engaged = models.BooleanField(default=False)   
+
+    def __str__(self):
+        return f"{self.user} → {self.post} | clicked={self.clicked}, engaged={self.engaged}"
 
     class Meta:
         indexes = [
             models.Index(fields=["user", "tier", "created_at"]),
         ]
         ordering = ["-created_at"]
-
 
 class RecommendationStats(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
@@ -125,7 +129,11 @@ class RecommendationStats(models.Model):
         default=1
     )
     date = models.DateField()
+
+    # aggregated metrics
     count = models.IntegerField(default=0)
+    click_count = models.IntegerField(default=0)
+    engage_count = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ("user", "tier", "date")
@@ -133,6 +141,3 @@ class RecommendationStats(models.Model):
             models.Index(fields=["date", "tier"]),
             models.Index(fields=["user", "date"]),
         ]
-
-    def __str__(self):
-        return f"{self.date} | {self.user} | Tier {self.tier} → {self.count}"
