@@ -101,13 +101,38 @@ class PostStatusHistory(models.Model):
 
     def __str__(self):
         return f"{self.post.title}: {self.old_status} → {self.new_status}"
-    
+
 class RecommendationLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    post = models.ForeignKey(Post, on_delete=models.CASCADE)
-    recommended_at = models.DateTimeField(auto_now_add=True)
-    clicked = models.BooleanField(default=False)  
-    engaged = models.BooleanField(default=False) 
-    
+    post = models.ForeignKey("Post", on_delete=models.CASCADE)
+    tier = models.IntegerField(
+        choices=[(3, "Engaged"), (2, "Fresh/Trending"), (1, "Exploration")],
+        default=1
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user", "tier", "created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+
+class RecommendationStats(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    tier = models.IntegerField(
+        choices=[(3, "Engaged"), (2, "Fresh/Trending"), (1, "Exploration")],
+        default=1
+    )
+    date = models.DateField()
+    count = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = ("user", "tier", "date")
+        indexes = [
+            models.Index(fields=["date", "tier"]),
+            models.Index(fields=["user", "date"]),
+        ]
+
     def __str__(self):
-        return f"{self.user} → {self.post} | clicked={self.clicked}, engaged={self.engaged}"
+        return f"{self.date} | {self.user} | Tier {self.tier} → {self.count}"

@@ -115,69 +115,39 @@ def trending_category_view(request, category_slug):
 @login_required
 def for_you_view(request):
     user = request.user
-    profile = get_profile_or_none(request.user)
+    profile = get_profile_or_none(user)
     if not profile:
         return redirect('/')
-        
-    # print(profile)
-    selected_tab = request.GET.get('tab', 'for_you')
-    start_time = time.time()
 
-    fallback_posts = cache.get(f'user_fallback_{user.id}')
-    if not fallback_posts:
-        fallback_posts = Post.objects.filter(is_suspended=False).order_by('-created_at')[:30]
-        cache.set(f'user_fallback_{user.id}', fallback_posts, 86400)
+    selected_tab = request.GET.get('tab', 'for_you')
 
     if selected_tab == 'for_you':
         try:
             posts = get_user_recommendations(user, top_n=30)
-            elapsed = time.time() - start_time
-
-            # Use last known good recommendation if current took too long
-            if elapsed > 2.0:
-                print(f"⚠️ Recommender slow ({elapsed:.2f}s), using cache fallback.")
-                posts = cache.get(f'user_recs_{user.id}_cached', fallback_posts)
         except Exception as e:
             print(f"🛑 Recommendation error: {str(e)}")
-            posts = fallback_posts
-
-        # Save for next time (if successful)
-        if posts:
-            cache.set(f'user_recs_{user.id}_cached', posts, 1800)
+            posts = Post.objects.filter(is_suspended=False).order_by('-created_at')[:30]
 
     else:
-        # Handle category-based tab
-        cache_key = f'user_categories_{user.id}'
-        categories = cache.get(cache_key)
-
-        if not categories:
-            categories = list(profile.category_preferences.all().order_by('name'))
-            cache.set(cache_key, categories, 3600)
-
+        categories = list(profile.category_preferences.all().order_by('name'))
         category = next(
-            (c for c in categories if slugify(c.name.lower()) == selected_tab.lower()), 
+            (c for c in categories if slugify(c.name.lower()) == selected_tab.lower()),
             None
         )
 
         if category:
             posts = get_trending_posts(category=category, days=7)
             if not posts.exists():
-                posts = cache.get(f'category_posts_{category.id}')
-                if not posts:
-                    posts = Post.objects.filter(category=category).order_by('-created_at')[:30]
-                    cache.set(f'category_posts_{category.id}', posts, 3600)
+                posts = Post.objects.filter(category=category).order_by('-created_at')[:30]
         else:
             posts = Post.objects.none()
-
-    # Ensure always fallback-ready
-    if not posts or not posts.exists():
-        posts = fallback_posts
 
     return render(request, 'for_you.html', {
         'page_obj': paginate(request, posts),
         'selected_tab': selected_tab,
         'interest_categories': profile.category_preferences.all().order_by('name')
     })
+
 
 
 def following_posts(request):

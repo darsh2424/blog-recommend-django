@@ -1,6 +1,7 @@
 from datetime import timedelta
 from django.db import models  
 import time
+from django.utils import timezone
 from django.utils.timezone import now
 from django.db.models import Count, Q, F, ExpressionWrapper, FloatField
 from django.core.cache import cache
@@ -11,20 +12,25 @@ from blog.models import Post, Category, RecommendationLog
 from users.models import PostInteraction, UserProfile, User
 import pickle
 import pandas as pd
+import random
 from random import sample
 from collections import defaultdict
 import os
-# Constants
-
-USER_RECS_CACHE_TIMEOUT = 10 * 60 
-SIMILARITY_CACHE_TIMEOUT = 30 * 60 
-COLD_START_DAYS = 3 
+import numpy as np
 
 WEIGHTS = {
     'view': 1,
     'like': 2, 
     'comment': 1.5
 }
+
+ENGAGED_WEIGHT = 3
+FRESH_WEIGHT = 2
+TRENDING_WEIGHT = 1
+
+MAX_RECOMMENDATIONS = 10
+MAX_PER_CATEGORY = 3
+
 def get_trending_posts(category=None, days=7, top_n=10, require_interactions=False):
     posts = _calculate_trending_posts(category, days, top_n) 
     return posts
@@ -54,7 +60,7 @@ def _calculate_trending_posts(category=None, days=7, top_n=10, require_interacti
                 (F('num_views') * WEIGHTS['view']) +
                 (F('num_likes') * WEIGHTS['like']) +
                 (F('num_comments') * WEIGHTS['comment'])
-            ) / (1 + F('hours_since_post')/24),  # Recent posts get boost
+            ) / (1 + F('hours_since_post')/24),  
             output_field=FloatField()
         )
     ).order_by('-score', '-created_at')
@@ -62,101 +68,116 @@ def _calculate_trending_posts(category=None, days=7, top_n=10, require_interacti
     return qs[:top_n]
 
 def get_user_recommendations(user, top_n=10):
-    sim_matrix, index_map = load_similarity_data()
-    liked_post_ids = set()
-    weighted_scores = defaultdict(float)
 
-    # Step 1: Content-based filtering via similarity
-    interactions = PostInteraction.objects.filter(user=user, liked=True).select_related('post')
-    
+    sim_matrix, index_map = load_similarity_data()
+    if sim_matrix is None or index_map is None:
+        sim_matrix, index_map = None, {}
+
+    weighted_scores = defaultdict(float)
+    liked_post_ids = set()
+
+    # --- Step 1: Feedback loop (CTR friendly) ---
+    interactions = PostInteraction.objects.filter(user=user, liked=True).select_related("post")
     for interaction in interactions:
-        try:
-            liked_post_ids.add(interaction.post.id)
+        liked_post_ids.add(interaction.post.id)
+        if sim_matrix is not None and interaction.post.id in index_map:
             idx = index_map[interaction.post.id]
             similar_indices = sim_matrix[idx].argsort()[::-1][1:30]
             for i in similar_indices:
                 pid = list(index_map.keys())[i]
                 if pid != interaction.post.id:
-                    weighted_scores[pid] += sim_matrix[idx][i]
-        except Exception:
-            continue
+                    weighted_scores[pid] += float(sim_matrix[idx][i])
 
-    # Remove already liked
+    # remove already liked
     for pid in liked_post_ids:
         weighted_scores.pop(pid, None)
 
-    top_similar_ids = sorted(weighted_scores, key=weighted_scores.get, reverse=True)[:top_n*2]
+    top_similar_ids = sorted(weighted_scores, key=weighted_scores.get, reverse=True)[: top_n * 2]
 
-    # Step 2: Trending
-    trending_ids = list(Post.objects.filter(is_suspended=False)
-    .annotate(
-        likes=Count('interactions', filter=Q(interactions__liked=True)),
-        views=Count('interactions', filter=Q(interactions__viewed=True))
-    ).order_by('-likes', '-views', '-created_at').values_list('id', flat=True)[:top_n*2])
+    # --- Step 2: Trending (popularity boost) ---
+    trending_ids = list(
+        Post.objects.filter(is_suspended=False)
+        .annotate(
+            likes=Count("interactions", filter=Q(interactions__liked=True)),
+            views=Count("interactions", filter=Q(interactions__viewed=True)),
+        )
+        .order_by("-likes", "-views", "-created_at")
+        .values_list("id", flat=True)[: top_n * 2]
+    )
 
-    # Step 3: Recent
-    recent_ids = list(Post.objects.filter(is_suspended=False)
-    .order_by('-created_at')
-    .values_list('id', flat=True)[:top_n*2])
+    # --- Step 3: Freshness (new content boost) ---
+    recent_ids = list(
+        Post.objects.filter(is_suspended=False)
+        .order_by("-created_at")
+        .values_list("id", flat=True)[: top_n * 2]
+    )
 
-    # Step 4: Profile Category Preference
+    # --- Step 4: Profile category preference ---
     category_pref_ids = list(
-    Post.objects.filter(
-        category__in=user.profile.category_preferences.all(),
-        is_suspended=False
-    )
-    .order_by('-created_at')
-    .exclude(id__in=top_similar_ids + trending_ids + recent_ids)
-    .values_list('id', flat=True)[:top_n*2]
+        Post.objects.filter(category__in=user.profile.category_preferences.all(), is_suspended=False)
+        .exclude(id__in=top_similar_ids + trending_ids + recent_ids)
+        .order_by("-created_at")
+        .values_list("id", flat=True)[: top_n * 2]
     )
 
-    # Step 5: Merge with diversity enforcement
+    # --- Step 5: Fallback cold start (exploration) ---
+    fallback_ids = list(
+        Post.objects.filter(is_suspended=False)
+        .exclude(id__in=top_similar_ids + trending_ids + recent_ids + category_pref_ids)
+        .order_by("?")
+        .values_list("id", flat=True)[: top_n]
+    )
+
+    # --- Tiered blending with weights ---
+    # Tier 3 → Engaged/CTR-like (highest weight)
+    tier_3 = list(top_similar_ids)
+    # Tier 2 → Fresh content (recent + trending)
+    tier_2 = list(set(trending_ids + recent_ids))
+    # Tier 1 → Exploration (category + fallback)
+    tier_1 = list(set(category_pref_ids + fallback_ids))
+
+    # Shuffle inside tiers (keeps feed dynamic)
+    random.shuffle(tier_3)
+    random.shuffle(tier_2)
+    random.shuffle(tier_1)
+
+    # Merge tiers in weighted ratio (3:2:1 priority)
     combined = []
+    tier_plan = [(tier_3, 3), (tier_2, 2), (tier_1, 1)]
     seen = set()
-    cat_count = defaultdict(int)
-    MAX_PER_CATEGORY = 3
 
-    def add_unique(ids):
-        for pid in ids:
+    for tier_posts, weight in tier_plan:
+        for pid in tier_posts:
             if pid not in seen:
-                category_id = Post.objects.filter(id=pid).values_list('category_id', flat=True).first()
-                if cat_count[category_id] >= MAX_PER_CATEGORY:
-                    continue
-                combined.append(pid)
+                combined.append((pid, weight))  # store weight along with post
                 seen.add(pid)
-                cat_count[category_id] += 1
             if len(combined) >= top_n:
                 break
+        if len(combined) >= top_n:
+            break
 
-    add_unique(top_similar_ids)
-    add_unique(trending_ids)
-    add_unique(recent_ids)
-    add_unique(category_pref_ids)
+    # --- Fetch actual posts ---
+    post_ids = [pid for pid, _ in combined]
+    posts = list(
+        Post.objects.filter(id__in=post_ids, is_suspended=False)
+        .select_related("user", "category")
+    )
 
-    # Step 6: Cold-start fallback (exploration)
-    if len(combined) < top_n:
-        fallback_ids = list(
-            Post.objects.filter(is_suspended=False)
-            .exclude(id__in=seen)
-            .order_by('?')
-            .values_list('id', flat=True)[:top_n]
-        )
-        add_unique(fallback_ids)
-
-    posts = Post.objects.filter(id__in=combined, is_suspended=False).select_related('user', 'category')
-
-    # Log recommendations
+    # --- Log into RecommendationLog with tier ---
+    weight_map = {pid: weight for pid, weight in combined}
     for post in posts:
-        RecommendationLog.objects.get_or_create(user=user, post=post)
+        RecommendationLog.objects.create(
+            user=user,
+            post=post,
+            tier=weight_map.get(post.id, 1),  
+        )
 
     return posts
-
-
 
 def similar_posts_for_post(post_id, top_n=5):
     """Get similar posts using precomputed similarity matrix"""
     sim_matrix, index_map = load_similarity_data()
-    if not sim_matrix:
+    if sim_matrix is None or index_map is None:
         return []
 
     try:
@@ -174,13 +195,17 @@ def load_similarity_data():
 
     try:
         cache_dir = os.path.join(settings.BASE_DIR, 'recommend/cache')
+
         with open(os.path.join(cache_dir, 'similarity_matrix.pkl'), 'rb') as f:
             sim_matrix = pickle.load(f)
         with open(os.path.join(cache_dir, 'index_map.pkl'), 'rb') as f:
             index_map = pickle.load(f)
 
+        # ✅ make sure sim_matrix is numpy array
+        sim_matrix = np.array(sim_matrix)
         cache.set(cache_key, (sim_matrix, index_map), 3600)
         return sim_matrix, index_map
+
     except Exception as e:
-        print(f"Similarity load error: {str(e)}")
+        print(f"⚠️ Similarity load error: {e}")
         return None, None
