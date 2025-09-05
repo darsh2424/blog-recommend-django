@@ -215,10 +215,14 @@
                                         class="text-blue-600 hover:text-blue-900" title="View Post">
                                         <i class="fas fa-external-link-alt"></i>
                                     </a>
-                                    <button onclick="openDeletePostModal({{ post.id }}, '{{ post.title|escapejs }}')"
-                                        class="text-red-600 hover:text-red-900" title="Delete Post">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    {% if post.is_suspended %}
+                                        <span class="text-gray-500 italic">Suspended</span>
+                                    {% else %}
+                                        <button onclick="openSuspendPostModal({{ post.id }}, '{{ post.title|escapejs }}')"
+                                            class="text-red-600 hover:text-red-900" title="Suspend Post">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -291,13 +295,13 @@
     </div>
 </div>
 
-<!-- Delete Post Modal -->
-<div id="deletePostModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+<!-- Suspend Post Modal -->
+<div id="suspendPostModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
     <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-medium text-gray-900">Delete Post</h3>
-                <button onclick="closeDeletePostModal()" class="text-gray-400 hover:text-gray-600">
+                <h3 class="text-lg font-medium text-gray-900">Suspend Post</h3>
+                <button onclick="closeSuspendPostModal()" class="text-gray-400 hover:text-gray-600">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -306,14 +310,14 @@
                     <i class="fas fa-exclamation-triangle text-red-500 text-xl mr-3"></i>
                     <div>
                         <p class="text-sm text-red-700 font-medium">Warning: This action cannot be undone!</p>
-                        <p class="text-xs text-red-600 mt-1">This will permanently delete the post and all associated
+                        <p class="text-xs text-red-600 mt-1">This will  Suspend the post and all associated
                             data.</p>
                     </div>
                 </div>
                 <p class="text-sm text-gray-600 mb-4">
-                    Are you sure you want to delete the post "<span id="postToDelete" class="font-semibold"></span>"?
+                    Are you sure you want to suspend the post "<span id="postToSuspend" class="font-semibold"></span>"?
                 </p>
-                <form id="deletePostForm" method="post">
+                <form id="suspendPostForm" method="post">
                     {% csrf_token %}
                     <div class="mb-4">
                         <label for="postConfirmationText" class="block text-sm font-medium text-gray-700 mb-2">
@@ -325,14 +329,14 @@
                             placeholder="Type confirmation text...">
                     </div>
                     <div class="flex justify-end gap-3">
-                        <button type="button" onclick="closeDeletePostModal()"
+                        <button type="button" onclick="closeSuspendPostModal()"
                             class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md">
                             Cancel
                         </button>
                         <button type="submit"
                             class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md">
                             <i class="fas fa-trash mr-1"></i>
-                            Delete Post
+                            Suspend Post
                         </button>
                     </div>
                 </form>
@@ -368,16 +372,16 @@
         });
     });
 
-    function openDeletePostModal(postId, postTitle) {
-        const modal = document.getElementById('deletePostModal');
-        const form = document.getElementById('deletePostForm');
-        const postSpan = document.getElementById('postToDelete');
+    function openSuspendPostModal(postId, postTitle) {
+        const modal = document.getElementById('suspendPostModal');
+        const form = document.getElementById('suspendPostForm');
+        const postSpan = document.getElementById('postToSuspend');
         const confirmationRequired = document.getElementById('postConfirmationTextRequired');
         const confirmationInput = document.getElementById('postConfirmationText');
 
-        const confirmationText = `Delete Post ${postId}`;
+        const confirmationText = `Suspend Post ${postId}`;
 
-        form.action = `/post/${postId}/delete/`;
+        form.action = `./suspend/${postId}/`;
         postSpan.textContent = postTitle;
         confirmationRequired.textContent = confirmationText;
         confirmationInput.value = '';
@@ -386,22 +390,22 @@
         confirmationInput.focus();
     }
 
-    function closeDeletePostModal() {
-        document.getElementById('deletePostModal').classList.add('hidden');
+    function closeSuspendPostModal() {
+        document.getElementById('suspendPostModal').classList.add('hidden');
         document.getElementById('postConfirmationText').value = '';
     }
 
     // Close modal on escape key
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
-            closeDeletePostModal();
+            closeSuspendPostModal();
         }
     });
 
     // Close modal when clicking outside
-    document.getElementById('deletePostModal').addEventListener('click', function (e) {
+    document.getElementById('suspendPostModal').addEventListener('click', function (e) {
         if (e.target === this) {
-            closeDeletePostModal();
+            closeSuspendPostModal();
         }
     });
 

@@ -476,21 +476,27 @@ def manage_posts(request):
     return render(request, 'admin_management/manage_posts.html', context)
 
 @admin_required
-def delete_post(request, post_id):
-    """Delete post with confirmation"""
+def suspend_post(request, post_id):
+    """Suspend post instead of deleting (with confirmation)"""
     if request.method == 'POST':
         confirmation_text = request.POST.get('confirmation_text', '')
-        expected_text = f"Delete Post {post_id}"
+        expected_text = f"Suspend Post {post_id}"
         
         if confirmation_text == expected_text:
             post = get_object_or_404(Post, id=post_id)
             post_title = post.title
-            post.delete()
-            messages.success(request, f'Post "{post_title}" deleted successfully!')
+
+            # Instead of deleting → mark as suspended
+            post.is_suspended = True
+            post.status = 'suspended'
+            post.save()  # 🔥 signals will log automatically
+
+            messages.success(request, f'Post "{post_title}" suspended successfully!')
         else:
             messages.error(request, 'Invalid confirmation text!')
             
     return redirect('manage_posts')
+
 
 @admin_required
 def manage_users(request):
@@ -558,17 +564,21 @@ def manage_users(request):
     return render(request, 'admin_management/manage_users.html', context)
 
 @admin_required
-def delete_user(request, user_id):
-    """Delete user with confirmation"""
+def suspend_user(request, user_id):
+    """Suspend user instead of deleting (with confirmation)"""
     if request.method == 'POST':
         confirmation_text = request.POST.get('confirmation_text', '')
-        expected_text = f"Delete User {user_id}"
+        expected_text = f"Suspend User {user_id}"
         
         if confirmation_text == expected_text:
             user = get_object_or_404(User, id=user_id)
             username = user.username or user.email
-            user.delete()
-            messages.success(request, f'User "{username}" deleted successfully!')
+
+            user.is_suspended = True
+            user.status = 'suspended'
+            user.save()  
+
+            messages.success(request, f'User "{username}" suspended successfully!')
         else:
             messages.error(request, 'Invalid confirmation text!')
             

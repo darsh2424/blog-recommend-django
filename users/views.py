@@ -11,7 +11,7 @@ from django.db.models import Count, Q, F, ExpressionWrapper, FloatField
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse, HttpResponseRedirect
-from blog.models import Post, Category, Comment, CommentReply
+from blog.models import Post, Category, Comment, CommentReply, RecommendationLog
 from users.models import UserProfile, PostInteraction, UserPostActivity, User, PostReport
 from recommend.utils import (
     get_user_recommendations,
@@ -35,47 +35,61 @@ def get_user_and_profile(session):
     user_id = session.get('user_id')
     if not user_id:
         return None, None
-
     try:
         user = User.objects.get(id=user_id)
+        if not user.is_authenticated or user.is_staff:
+            return None, None
         profile, _ = UserProfile.objects.get_or_create(user=user)
         return user, profile
     except User.DoesNotExist:
-        del session['user_id']
+        session.pop('user_id', None) 
         return None, None
 
+def get_profile_or_none(user):
+    """
+    Return profile for non-staff authenticated users.
+    Return None otherwise.
+    """
+    if not user or not user.is_authenticated or user.is_staff:
+        return None
+    try:
+        return user.profile
+    except UserProfile.DoesNotExist:
+        return None
+
 def index(request):
-        categories = Category.objects.all().order_by('name')
-        category_post_map = []
-        
-        for cat in categories:
-            # First try with strict trending criteria
-            posts = get_trending_posts(category=cat, days=7, top_n=3)
-            
-            # If empty, relax the requirements
-            if not posts.exists():
-                posts = get_trending_posts(category=cat, days=30, top_n=3)
-            
-            if posts.exists():
-                category_post_map.append((cat, posts))
-        
-        context = {
-            'category_post_map': category_post_map,
-            'categories': categories,
-            'user': request.user if request.user.is_authenticated else None
-        }
+    categories = Category.objects.all().order_by('name')
+    category_post_map = []
     
-        # User onboarding checks
-        if request.user.is_authenticated:
-            profile = request.user.profile
-            if not request.user.username:
-                return redirect('profile_dtl')
-            if not all([profile.gender, profile.birth_date, profile.location]):
-                return redirect('other_dtl')
-            if profile.category_preferences.count() < 3:
-                return redirect('interest_selection')
+    for cat in categories:
+        # First try with strict trending criteria
+        posts = get_trending_posts(category=cat, days=7, top_n=3)
         
-        return render(request, 'index.html', context)
+        # If empty, relax the requirements
+        if not posts.exists():
+            posts = get_trending_posts(category=cat, days=60, top_n=3)
+        
+        if posts.exists():
+            category_post_map.append((cat, posts))
+    
+    context = {
+        'category_post_map': category_post_map,
+        'categories': categories,
+        'user': request.user if request.user.is_authenticated else None
+    }
+
+    # User onboarding checks (only for non-staff users)
+    if request.user.is_authenticated and not request.user.is_staff:
+        profile, _ = UserProfile.objects.get_or_create(user=request.user)
+
+        if not request.user.username:
+            return redirect('profile_dtl')
+        if not all([profile.gender, profile.birth_date, profile.location]):
+            return redirect('other_dtl')
+        if profile.category_preferences.count() < 3:
+            return redirect('interest_selection')
+
+    return render(request, 'index.html', context)
 
 def trending_category_view(request, category_slug):
     category = get_object_or_404(Category, name__iexact=category_slug)
@@ -84,11 +98,11 @@ def trending_category_view(request, category_slug):
     # posts = get_trending_posts(category=category, days=7)
 
     posts = get_trending_posts(category=category, days=7)
-            
     if not posts.exists():
         posts = get_trending_posts(category=category, days=30)
+    if not posts.exists():
+        posts = get_trending_posts(category=category, days=None)
             
-
     # page_obj = paginate(request, category_post_map, per_page=9)
     categories = Category.objects.all().order_by('name')
 
@@ -101,13 +115,17 @@ def trending_category_view(request, category_slug):
 @login_required
 def for_you_view(request):
     user = request.user
-    profile = user.profile
+    profile = get_profile_or_none(request.user)
+    if not profile:
+        return redirect('/')
+        
+    # print(profile)
     selected_tab = request.GET.get('tab', 'for_you')
     start_time = time.time()
 
     fallback_posts = cache.get(f'user_fallback_{user.id}')
     if not fallback_posts:
-        fallback_posts = Post.objects.order_by('-created_at')[:30]
+        fallback_posts = Post.objects.filter(is_suspended=False).order_by('-created_at')[:30]
         cache.set(f'user_fallback_{user.id}', fallback_posts, 86400)
 
     if selected_tab == 'for_you':
@@ -166,10 +184,12 @@ def following_posts(request):
     if not request.user.is_authenticated:
         return redirect('/')
     # Get the current user's profile
-    profile = request.user.profile
+    profile = get_profile_or_none(request.user)
+    if not profile:
+        return redirect('/')
     
     # Get all posts from followed users
-    posts = profile.following_posts
+    posts = profile.following_posts.filter(is_suspended=False)
     
     # Filter by specific user if requested
     username = request.GET.get('user')
@@ -222,7 +242,7 @@ def follow_unfollow_user(request, username):
 def user_profile_view(request, username):
     """Optimized profile view with counts"""
     user = get_object_or_404(User, username=username)
-    posts = Post.objects.filter(user=user).order_by('-created_at')
+    posts = Post.objects.filter(user=user, is_suspended=False).order_by('-created_at')
     
     # Single query for all counts
     stats = posts.aggregate(
@@ -240,46 +260,56 @@ def user_profile_view(request, username):
 def post_detail_view(request, post_id):
     categories = Category.objects.all().order_by('name')
     post = get_object_or_404(Post, id=post_id)
+    if post.is_suspended:
+        messages.error(request, "This post has been suspended.")
+        return redirect('/')
     comments = post.comments.all().order_by('created_at')
 
     profile_user = get_object_or_404(User, username=post.user.username)
 
      # Record the view
-    if request.user.is_authenticated:
+    if request.user.is_authenticated and not request.user.is_staff:
         interaction, created = PostInteraction.objects.get_or_create(user=request.user, post=post)
         if not interaction.viewed:
             interaction.viewed = True
             interaction.save()
+            
+        if interaction.viewed:
+            RecommendationLog.objects.filter(user=request.user, post=post).update(clicked=True)
 
 
     is_following = False
     is_liked = False
     is_saved = False
 
-    if request.user.is_authenticated:
+    profile = get_profile_or_none(request.user)
+
+    if profile:
         try:
             interaction = PostInteraction.objects.get(user=request.user, post=post)
             is_liked = interaction.liked
         except PostInteraction.DoesNotExist:
             pass
 
-        is_saved = post in request.user.profile.saved_posts.all()
+        is_saved = post in profile.saved_posts.all()
 
-        if post.user != request.user:
-            is_following = request.user.profile.is_following(post.user.profile)
+        post_user_profile = get_profile_or_none(post.user)
+        if post_user_profile and post.user != request.user:
+            is_following = profile.is_following(post_user_profile)
 
-   
-    return render(request, 'post_detail.html', 
-            {
-                'post': post, 
-                'comments': comments,
-                'categories':categories,
-                'is_following': is_following,
-                'is_liked':is_liked,
-                'is_saved':is_saved,
-                'profile_user':profile_user
-             }
-        )
+    return render(
+        request,
+        'post_detail.html',
+        {
+            'post': post,
+            'comments': comments,
+            'categories': categories,
+            'is_following': is_following,
+            'is_liked': is_liked,
+            'is_saved': is_saved,
+            'profile_user': profile_user,
+        }
+    )
 
 
 def logout_view(request):
@@ -771,6 +801,8 @@ def toggle_like(request, post_id):
     interaction.liked = not interaction.liked
     interaction.save()
 
+    if interaction.liked:
+        RecommendationLog.objects.filter(user=request.user, post=post).update(engaged=True)
     # Return the fresh count from the database
     return JsonResponse({
         'status': 'liked' if interaction.liked else 'unliked',
@@ -800,8 +832,7 @@ def toggle_save(request, post_id):
 
 @login_required
 def saved_posts_view(request):
-    posts = request.user.profile.saved_posts.order_by('-created_at')
-
+    posts = request.user.profile.saved_posts.filter(is_suspended=False).order_by('-created_at')
     return render(request, 'saved_post.html', {
         'posts': posts,
     })
@@ -809,7 +840,7 @@ def saved_posts_view(request):
 @login_required
 def liked_posts_view(request):
     interactions = PostInteraction.objects.filter(user=request.user, liked=True).select_related('post').order_by('-timestamp')
-    liked_posts = [interaction.post for interaction in interactions]
+    liked_posts = [interaction.post for interaction in interactions if not interaction.post.is_suspended]
 
     return render(request, 'liked_posts.html', {
         'posts': liked_posts,

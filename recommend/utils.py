@@ -7,7 +7,7 @@ from django.core.cache import cache
 from django.conf import settings
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from blog.models import Post, Category
+from blog.models import Post, Category, RecommendationLog
 from users.models import PostInteraction, UserProfile, User
 import pickle
 import pandas as pd
@@ -23,8 +23,7 @@ COLD_START_DAYS = 3
 WEIGHTS = {
     'view': 1,
     'like': 2, 
-    'comment': 1.5,
-    'same_category_boost': 1.3
+    'comment': 1.5
 }
 def get_trending_posts(category=None, days=7, top_n=10, require_interactions=False):
     posts = _calculate_trending_posts(category, days, top_n) 
@@ -32,7 +31,7 @@ def get_trending_posts(category=None, days=7, top_n=10, require_interactions=Fal
 
 def _calculate_trending_posts(category=None, days=7, top_n=10, require_interactions=False):
     """Improved with better fallbacks"""
-    qs = Post.objects.all()
+    qs = Post.objects.filter(is_suspended=False)
     
     if days:
         time_filter = now() - timedelta(days=days)
@@ -89,23 +88,27 @@ def get_user_recommendations(user, top_n=10):
     top_similar_ids = sorted(weighted_scores, key=weighted_scores.get, reverse=True)[:top_n*2]
 
     # Step 2: Trending
-    trending_ids = list(Post.objects.annotate(
+    trending_ids = list(Post.objects.filter(is_suspended=False)
+    .annotate(
         likes=Count('interactions', filter=Q(interactions__liked=True)),
         views=Count('interactions', filter=Q(interactions__viewed=True))
     ).order_by('-likes', '-views', '-created_at').values_list('id', flat=True)[:top_n*2])
 
     # Step 3: Recent
-    recent_ids = list(Post.objects.order_by('-created_at').values_list('id', flat=True)[:top_n*2])
+    recent_ids = list(Post.objects.filter(is_suspended=False)
+    .order_by('-created_at')
+    .values_list('id', flat=True)[:top_n*2])
 
     # Step 4: Profile Category Preference
-    category_pref_ids = []
-    if hasattr(user, 'profile') and user.profile.category_preferences.exists():
-        category_pref_ids = list(
-            Post.objects.filter(category__in=user.profile.category_preferences.all())
-            .order_by('-created_at')
-            .exclude(id__in=top_similar_ids + trending_ids + recent_ids)
-            .values_list('id', flat=True)[:top_n*2]
-        )
+    category_pref_ids = list(
+    Post.objects.filter(
+        category__in=user.profile.category_preferences.all(),
+        is_suspended=False
+    )
+    .order_by('-created_at')
+    .exclude(id__in=top_similar_ids + trending_ids + recent_ids)
+    .values_list('id', flat=True)[:top_n*2]
+    )
 
     # Step 5: Merge with diversity enforcement
     combined = []
@@ -133,11 +136,21 @@ def get_user_recommendations(user, top_n=10):
     # Step 6: Cold-start fallback (exploration)
     if len(combined) < top_n:
         fallback_ids = list(
-            Post.objects.exclude(id__in=seen).order_by('?').values_list('id', flat=True)[:top_n]
+            Post.objects.filter(is_suspended=False)
+            .exclude(id__in=seen)
+            .order_by('?')
+            .values_list('id', flat=True)[:top_n]
         )
         add_unique(fallback_ids)
 
-    return Post.objects.filter(id__in=combined).select_related('user', 'category')
+    posts = Post.objects.filter(id__in=combined, is_suspended=False).select_related('user', 'category')
+
+    # Log recommendations
+    for post in posts:
+        RecommendationLog.objects.get_or_create(user=user, post=post)
+
+    return posts
+
 
 
 def similar_posts_for_post(post_id, top_n=5):
@@ -150,7 +163,7 @@ def similar_posts_for_post(post_id, top_n=5):
         idx = index_map[post_id]
         similar_indices = sim_matrix[idx].argsort()[::-1][1:top_n + 1]
         similar_ids = [list(index_map.keys())[i] for i in similar_indices]
-        return list(Post.objects.filter(id__in=similar_ids))
+        return list(Post.objects.filter(id__in=similar_ids, is_suspended=False))
     except KeyError:
         return []
 

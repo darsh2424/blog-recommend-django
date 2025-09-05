@@ -286,19 +286,55 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Apply date range to all charts
     document.getElementById('applyDateRange').addEventListener('click', function() {
-        const startDate = document.getElementById('dashboardStartDate').value;
-        const endDate = document.getElementById('dashboardEndDate').value;
-        
-        if (validateDateRange(startDate, endDate)) {
+        const startDateStr = document.getElementById('dashboardStartDate').value;
+        const endDateStr = document.getElementById('dashboardEndDate').value;
+
+        if (validateDateRange(startDateStr, endDateStr)) {
             // Update all charts with new date range
-            const chartTypes = ['user_growth', 'daily_active_users', 'post_engagement', 
-                               'top_posts', 'category_breakdown', 'reports'];
-            
+            const chartTypes = [
+                'user_growth', 
+                'daily_active_users', 
+                'post_engagement', 
+                'top_posts', 
+                'category_breakdown', 
+                'reports'
+            ];
+
             chartTypes.forEach(chartType => {
-                loadChart(chartType, startDate, endDate);
+                loadChart(chartType, startDateStr, endDateStr);
             });
         }
     });
+
+    function validateDateRange(startDateStr, endDateStr) {
+        if (!startDateStr || !endDateStr) {
+            alert("Please select both start and end dates.");
+            return false;
+        }
+
+        const startDate = new Date(startDateStr);
+        const endDate = new Date(endDateStr);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); 
+
+        if (isNaN(startDate) || isNaN(endDate)) {
+            alert("Invalid date format.");
+            return false;
+        }
+
+        if (startDate > endDate) {
+            alert("Start date cannot be later than end date.");
+            return false;
+        }
+
+        if (startDate > today || endDate > today) {
+            alert("Dates cannot be in the future.");
+            return false;
+        }
+
+        return true;
+    }
+
     
     // Reset date range
     document.getElementById('resetDateRange').addEventListener('click', function() {
