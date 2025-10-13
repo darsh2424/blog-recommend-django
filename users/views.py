@@ -25,12 +25,22 @@ import json
 from django.utils.text import slugify
 import time
 import cloudinary
+from recommend.utils import search_relevant_posts
 
 def paginate(request, items, per_page=9):
     """Optimized pagination with prefetch"""
     paginator = Paginator(items, per_page)
     page = request.GET.get('page')
     return paginator.get_page(page)
+
+def search_view(request):
+    query = request.GET.get("q", "")
+    posts = []
+    
+    if query:
+        posts = search_relevant_posts(query)
+    return render(request, "search_results.html", {"posts": posts, "query": query})
+
 
 def get_user_and_profile(session):
     user_id = session.get('user_id')
@@ -58,6 +68,34 @@ def get_profile_or_none(user):
     except UserProfile.DoesNotExist:
         return None
 
+def ensure_profile_complete(user):
+    """
+    Check if user profile is complete and return appropriate redirect.
+    Returns None if profile is complete, otherwise returns redirect response.
+    """
+    if not user.is_authenticated or user.is_staff:
+        return None
+    
+    try:
+        profile = user.profile
+    except UserProfile.DoesNotExist:
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+    
+    # Check username
+    if not user.username:
+        return redirect('profile_dtl')
+    
+    # Check basic profile fields
+    if not all([profile.gender, profile.birth_date, profile.location]):
+        return redirect('other_dtl')
+    
+    # Check category preferences
+    if profile.category_preferences.count() < 3:
+        return redirect('interest_selection')
+    
+    return None
+
+
 def index(request):
     categories = Category.objects.all().order_by('name')
     category_post_map = []
@@ -68,7 +106,7 @@ def index(request):
         
         # If empty, relax the requirements
         if not posts.exists():
-            posts = get_trending_posts(category=cat, days=60, top_n=3)
+            posts = get_trending_posts(category=cat, days=150, top_n=3)
         
         if posts.exists():
             category_post_map.append((cat, posts))
@@ -81,16 +119,12 @@ def index(request):
 
     # User onboarding checks (only for non-staff users)
     if request.user.is_authenticated and not request.user.is_staff:
-        profile, _ = UserProfile.objects.get_or_create(user=request.user)
-
-        if not request.user.username:
-            return redirect('profile_dtl')
-        if not all([profile.gender, profile.birth_date, profile.location]):
-            return redirect('other_dtl')
-        if profile.category_preferences.count() < 3:
-            return redirect('interest_selection')
+        redirect_response = ensure_profile_complete(request.user)
+        if redirect_response:
+            return redirect_response
 
     return render(request, 'index.html', context)
+
 
 def trending_category_view(request, category_slug):
     category = get_object_or_404(Category, name__iexact=category_slug)
@@ -114,13 +148,19 @@ def trending_category_view(request, category_slug):
     })
 
 def for_you_view(request):
-    user = request.user
-    profile = get_profile_or_none(user)
-    page_obj=None
+    # Check authentication first
     if not request.user.is_authenticated:
+        messages.info(request, "Please log in to access personalized content.")
         return redirect('/')
-    if not profile:
-        return redirect('/')
+    
+    # Check if profile is complete
+    redirect_response = ensure_profile_complete(request.user)
+    if redirect_response:
+        return redirect_response
+    
+    user = request.user
+    profile = user.profile  # Safe to access now
+    page_obj = None
 
     selected_tab = request.GET.get('tab', 'for_you')
 
@@ -130,7 +170,7 @@ def for_you_view(request):
         except Exception as e:
             print(f"🛑 Recommendation error: {str(e)}")
             posts = Post.objects.filter(is_suspended=False).order_by('-created_at')[:30]
-        page_obj=posts
+        page_obj = posts
     else:
         categories = list(profile.category_preferences.all().order_by('name'))
         category = next(
@@ -148,7 +188,7 @@ def for_you_view(request):
                 posts = Post.objects.filter(category=category).order_by('-created_at')[:30]
         else:
             posts = Post.objects.none()
-        page_obj=paginate(request, posts)
+        page_obj = paginate(request, posts)
 
     return render(request, 'for_you.html', {
         'page_obj': page_obj,
@@ -156,15 +196,18 @@ def for_you_view(request):
         'interest_categories': profile.category_preferences.all().order_by('name')
     })
 
-
-
 def following_posts(request):
+    # Check authentication first
     if not request.user.is_authenticated:
+        messages.info(request, "Please log in to see posts from people you follow.")
         return redirect('/')
-    # Get the current user's profile
-    profile = get_profile_or_none(request.user)
-    if not profile:
-        return redirect('/')
+    
+    # Check if profile is complete
+    redirect_response = ensure_profile_complete(request.user)
+    if redirect_response:
+        return redirect_response
+    
+    profile = request.user.profile  # Safe to access now
     
     # Get all posts from followed users
     posts = profile.following_posts.filter(is_suspended=False)
@@ -178,15 +221,16 @@ def following_posts(request):
     paginator = Paginator(posts, 10)  
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    categories=Category.objects.all().order_by('name')
+    categories = Category.objects.all().order_by('name')
     
     context = {
         'posts': page_obj,
         'followed_users': profile.followed_users.all(),
         'page_obj': page_obj,  
-        'categories':categories
+        'categories': categories
     }
     return render(request, 'following_posts.html', context)
+
 
 @login_required
 def follow_unfollow_user(request, username):
@@ -228,10 +272,18 @@ def user_profile_view(request, username):
         total_likes=Count('interactions', filter=Q(interactions__liked=True))
     )
     
+    # Determine if current user is following the profile user
+    is_following = False
+    if request.user.is_authenticated and not request.user.is_staff:
+        try:
+            is_following = request.user.profile.is_following(user.profile)
+        except (UserProfile.DoesNotExist, AttributeError):
+            pass
+    
     return render(request, 'user_profile.html', {
         'profile_user': user,
         'page_obj': paginate(request, posts, 6),
-        'is_following': request.user.profile.is_following(user.profile) if request.user.is_authenticated else False,
+        'is_following': is_following,
         **stats
     })
 
@@ -400,73 +452,65 @@ def interest_selection_view(request):
 def validate_content(content, min_words=200, max_words=2000, min_paragraphs=2):
     """Validate content meets minimum requirements"""
     word_count = len(content.split())
-    # print(word_count)
     if word_count < min_words:
         return False, f"Content too short (minimum {min_words} words required)"
     if word_count > max_words:
         return False, f"Content too long (maximum {max_words} words allowed)"
     return True, ""
 
+
 def moderate_blog_content(title, content, category):
-    """Improved moderation with better relevance checking"""
+    """AI moderation with graceful fallback"""
     prompt = f"""
-You are a content moderation AI for a computer science technology platform. 
+You are a content moderation AI for a computer science technology platform.
 Evaluate if the content is relevant to the category by considering:
 
-1. Technical accuracy (40% weight)
-2. Category relevance (30% weight)
-3. Educational value (20% weight)
-4. Appropriate language (10% weight)
+1. Technical accuracy (40%)
+2. Category relevance (30%)
+3. Educational value (20%)
+4. Appropriate language (10%)
 
-Return ONLY a JSON response with these keys:
-- "verdict": "APPROVED" or "REJECTED"
-- "relevance_score": percentage (0-100)
-- "reason": brief explanation
+Return ONLY JSON:
+{{"verdict": "APPROVED" or "REJECTED", "relevance_score": int, "reason": "string"}}
 
----
 Title: {title}
 Category: {category}
-Content Excerpt:
-{content[:1500]}...
----
-
-Analyze the full context, not just keywords. Even if the title seems relevant, 
-reject if the content doesn't match the category's technical focus.
+Content: {content[:1500]}...
 """
+
     try:
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {settings.OPENROUTER_API_KEY_SECRET}",
-                "Content-Type": "application/json",
-                "X-Title": "Content Moderation"
+                "Content-Type": "application/json"
             },
             json={
                 "model": "mistralai/mistral-7b-instruct",
                 "response_format": {"type": "json_object"},
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3  
+                "temperature": 0.3
             },
+            timeout=25
         )
-        result = response.json()
-        moderation = result['choices'][0]['message']['content']
-        
-        try:
-            moderation_data = json.loads(moderation)
-            # print(moderation_data)
-            if moderation_data.get('relevance_score', 0) >= 40:
-                return "APPROVED", moderation_data.get('reason', 'Content meets requirements')
-            return f"REJECTED", {moderation_data.get('reason', 'Not relevant enough')}
-        except json.JSONDecodeError:
-            # Fallback if JSON parsing fails
-            verdict = moderation.strip().upper()
-            if "APPROVED" in verdict:
-                return "APPROVED", "Content approved"
-            return "REJECTED", "Unable to verify content relevance"
 
+        data = response.json()
+        moderation_raw = data.get('choices', [{}])[0].get('message', {}).get('content', '{}')
+        moderation_data = json.loads(moderation_raw)
+
+        verdict = moderation_data.get("verdict", "").upper()
+        score = moderation_data.get("relevance_score", 0)
+        reason = moderation_data.get("reason", "")
+
+        if verdict == "APPROVED" or score >= 40:
+            return "APPROVED", reason or "Content approved"
+        else:
+            return "REJECTED", reason or "Low relevance"
     except Exception as e:
-        print(f"🛑 AI moderation failed: {str(e)}")
-        return "REJECTED: Moderation system error", str(e)
+        print(f"🛑 AI moderation error: {e}")
+        # fallback to allow posting if moderation API fails
+        return "APPROVED", "AI moderation temporarily unavailable"
+
 
 @login_required
 def write_post_view(request):
@@ -565,7 +609,6 @@ def write_post_view(request):
             messages.error(request, f"Error saving blog: {str(e)}")
         
     return render(request, 'write_post.html', {'categories': categories})
-
 
 @login_required
 def edit_post_view(request, post_id):
@@ -812,6 +855,11 @@ def toggle_save(request, post_id):
 
 @login_required
 def saved_posts_view(request):
+    # Check if profile is complete
+    redirect_response = ensure_profile_complete(request.user)
+    if redirect_response:
+        return redirect_response
+    
     posts = request.user.profile.saved_posts.filter(is_suspended=False).order_by('-created_at')
     return render(request, 'saved_post.html', {
         'posts': posts,
@@ -819,7 +867,16 @@ def saved_posts_view(request):
 
 @login_required
 def liked_posts_view(request):
-    interactions = PostInteraction.objects.filter(user=request.user, liked=True).select_related('post').order_by('-timestamp')
+    # Check if profile is complete
+    redirect_response = ensure_profile_complete(request.user)
+    if redirect_response:
+        return redirect_response
+    
+    interactions = PostInteraction.objects.filter(
+        user=request.user, 
+        liked=True
+    ).select_related('post').order_by('-timestamp')
+    
     liked_posts = [interaction.post for interaction in interactions if not interaction.post.is_suspended]
 
     return render(request, 'liked_posts.html', {

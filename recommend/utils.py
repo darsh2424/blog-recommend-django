@@ -17,6 +17,11 @@ from random import sample
 from collections import defaultdict
 import os
 import numpy as np
+from django.db.models.functions import Now
+from django.db.models import (
+    Q, F, Count, Case, When, FloatField, ExpressionWrapper, Value
+)
+
 
 WEIGHTS = {
     'view': 1,
@@ -220,3 +225,76 @@ def load_similarity_data():
     except Exception as e:
         print(f"⚠️ Similarity load error: {e}")
         return None, None
+    
+
+def search_relevant_posts(search_text, top_n=15):
+    """
+    Search posts based on title/content relevance,
+    while promoting fresh & engaging (popular) posts.
+    """
+
+    qs = Post.objects.filter(is_suspended=False)
+
+    # ✅ Step 1: Text relevance (basic fuzzy match)
+    qs = qs.filter(
+        Q(title__icontains=search_text) |
+        Q(content__icontains=search_text)
+    )
+
+    # ✅ Step 2: Annotate popularity metrics
+    qs = qs.annotate(
+        num_likes=Count("interactions", filter=Q(interactions__liked=True)),
+        num_views=Count("interactions", filter=Q(interactions__viewed=True)),
+        num_comments=Count("comments"),
+    )
+
+    # ✅ Step 3: Compute popularity score (normalized)
+    qs = qs.annotate(
+        popularity_score=ExpressionWrapper(
+            (F("num_likes") * 2) + (F("num_comments") * 1.5) + (F("num_views") * 1.0),
+            output_field=FloatField()
+        )
+    )
+
+    # ✅ Step 4: Freshness factor (recent posts get higher score)
+    qs = qs.annotate(
+        hours_since_post=ExpressionWrapper(
+            (Now() - F("created_at")) / timedelta(hours=1),
+            output_field=FloatField(),
+        ),
+        freshness_score=ExpressionWrapper(
+            1 / (1 + (F("hours_since_post") / 24.0)),  # decay with age
+            output_field=FloatField(),
+        ),
+    )
+
+    # ✅ Step 5: Basic text relevance (approximation)
+    qs = qs.annotate(
+        relevance=Case(
+            When(title__icontains=search_text, then=Value(1.0)),
+            When(content__icontains=search_text, then=Value(0.8)),
+            default=Value(0.3),
+            output_field=FloatField(),
+        )
+    )
+
+    # ✅ Step 6: Extra boost for *very new* posts (last 48 hours)
+    recent_boost = Case(
+        When(created_at__gte=Now() - timedelta(days=2), then=Value(1.3)),  # +30% boost
+        default=Value(1.0),
+        output_field=FloatField(),
+    )
+
+    # ✅ Step 7: Combine all into a final score
+    qs = qs.annotate(
+        final_score=ExpressionWrapper(
+            (
+                (F("relevance") * 0.6) +
+                (F("popularity_score") * 0.3) +
+                (F("freshness_score") * 0.1)
+            ) * recent_boost,
+            output_field=FloatField(),
+        )
+    ).order_by("-final_score", "-created_at")
+
+    return qs[:top_n]

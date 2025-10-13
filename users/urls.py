@@ -11,6 +11,7 @@ urlpatterns = [
     path('select-interests/', views.interest_selection_view, name='interest_selection'),
     path('logout/', logout_view, name='logout'),
 
+    path('search/', views.search_view, name='search_view'),
     path('for-you/', views.for_you_view, name='for_you'),
     path('user/<str:username>/follow/', views.follow_unfollow_user, name='follow_user'),
     path('following/', views.following_posts, name='following_posts'),

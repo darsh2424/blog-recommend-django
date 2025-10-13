@@ -36,6 +36,25 @@
         <img src="{% static 'images/sys_logo.png' %}" alt="BlogNest Logo" height="45">
       </a>
 
+      <!-- Search Form -->
+      <div class="d-flex mx-auto" style="width: 100%; max-width: 600px;">
+        <input 
+          id="searchQuery"
+          class="form-control me-2"
+          type="text"
+          placeholder="Search blogs..."
+          aria-label="Search"
+          style="flex: 1; min-width: 200px; font-size: 0.95rem;"
+        >
+        <button 
+          class="btn btn-outline-success" 
+          type="button"
+          onclick="performSearch()"
+        >
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+      </div>
+
       <!-- Auth / Actions -->
       <div class="settings-div d-flex align-items-center gap-3 ms-auto">
         {% if user.is_authenticated %}
@@ -121,6 +140,13 @@
     scrollTopBtn.onclick = function () {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
+    function performSearch() {
+      const query = document.getElementById('searchQuery').value.trim();
+      if (query) {
+        window.location.href = `/search/?q=${encodeURIComponent(query)}`;
+      }
+    }
   </script>
 
 </body>
