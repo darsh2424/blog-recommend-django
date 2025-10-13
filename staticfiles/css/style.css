@@ -1,0 +1,191 @@
+/* Common CSS Base */
+    body {
+      overflow-x: hidden;
+    }
+
+.sidebar-left {
+  width: 230px;
+  min-height: 100vh;
+  background-color: #f8f9fa;
+  padding: 70px 0 20px 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* z-index: 1000; */
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+  border-right: 1px solid #ddd;
+}
+
+.sidebar-left a {
+  display: block;
+  padding: 10px 20px;
+  color: #333;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.sidebar-left a:hover {
+  background-color: #e9ecef;
+  border-radius: 4px;
+}
+
+.sidebar-left .sidebar-section {
+  padding: 0 10px;
+}
+
+.main-content {
+  margin-left: 230px;
+  padding: 90px 20px 20px 20px;
+}
+
+@media (max-width: 768px) {
+  .sidebar-left {
+    transform: translateX(-100%);
+    position: fixed;
+  }
+
+  .sidebar-left.show {
+    transform: translateX(0);
+  }
+
+  .main-content {
+    margin: 0;
+    padding: 100px 15px;
+  }
+}
+
+.post-img,
+.post-detail-img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+/* Card styling */
+.post {
+  display: flex;
+  flex-direction: column;
+  background-color: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  margin-bottom: 20px;
+}
+
+.hover-effect:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive card layout */
+@media (min-width: 768px) {
+  .post {
+    flex-direction: row;
+  }
+
+  .post-img {
+    width: 250px;
+    height: 200px;
+    border-radius: 8px 0 0 8px;
+  }
+}
+
+/* Post content inside card */
+.post-content {
+  flex: 1;
+  padding: 15px;
+}
+
+.post-content h5 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.post-content small {
+  font-size: 0.85rem;
+}
+
+.post-content p {
+  font-size: 0.95rem;
+  color: #666;
+  margin-top: 10px;
+}
+
+/* Stat Icons */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
+.stats i {
+  margin-right: 5px;
+  cursor: pointer;
+}
+
+.like {
+  color: #ff5252;
+}
+
+.comment {
+  color: #4285f4;
+}
+
+.views {
+  color: #6c757d;
+}
+
+.post-detail-container {
+  max-width: 800px;
+  margin: auto;
+}
+
+.post-detail-container h2 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.post-detail-container .text-muted {
+  font-size: 0.95rem;
+  margin-bottom: 15px;
+}
+
+.post-detail-container p.post-content {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #333;
+  margin-top: 10px;
+}
+
+/* Comments */
+.comment-container {
+  margin-top: 40px;
+}
+
+.comment-container h5 {
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.comment-container strong {
+  display: block;
+  font-size: 0.95rem;
+}
+
+.comment-container p {
+  font-size: 0.95rem;
+  color: #444;
+  margin-top: 5px;
+  margin-bottom: 15px;
+}
+
+img[loading="lazy"] {
+  background-color: #f2f2f2;
+}

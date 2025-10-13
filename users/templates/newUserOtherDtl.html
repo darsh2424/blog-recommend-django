@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Other Details{% endblock %}
+
+{% block content %}
+<div class="container d-flex justify-content-center align-items-center mt-5">
+  <div class="card shadow p-4 w-100 transition" style="max-width: 500px;">
+    <form method="POST" action="{% url 'other_dtl' %}">
+      {% csrf_token %}
+
+      <!-- Gender -->
+      <div class="mb-3">
+        <label class="form-label fw-bold d-block">Gender</label>
+        <div class="btn-group w-100" role="group">
+          <input type="radio" class="btn-check" name="gender" value="Male" id="gender_m" {% if user.profile.gender == "Male" %}checked{% endif %} required>
+          <label class="btn btn-outline-primary w-100" for="gender_m">He / Him</label>
+
+          <input type="radio" class="btn-check" name="gender" value="Female" id="gender_f" {% if user.profile.gender == "Female" %}checked{% endif %}>
+          <label class="btn btn-outline-danger w-100" for="gender_f">She / Her</label>
+
+          <input type="radio" class="btn-check" name="gender" value="Other" id="gender_o" {% if user.profile.gender == "Other" %}checked{% endif %}>
+          <label class="btn btn-outline-secondary w-100" for="gender_o">They / Them</label>
+        </div>
+      </div>
+
+      <!-- Birthdate -->
+      <div class="mb-3">
+        <label class="form-label fw-bold">Birthdate</label>
+        <!-- <input type="date" class="form-control" name="birth_date" value="{{ user.profile.birth_date|date:'Y-m-d' }}"> -->
+        <input type="text" class="form-control" id="birthdatePicker" name="birth_date" placeholder="Select birthdate"
+           value="{{ user.profile.birth_date|date:'Y-m-d' }}" required>
+      </div>
+
+      <!-- Location -->
+      <div class="mb-4">
+        <label class="form-label fw-bold">Location</label>
+        <select class="form-select" name="location" required>
+          <option value="">Select Country</option>
+          {% for country in countries %}
+            <option value="{{ country }}" {% if user.profile.location == country %}selected{% endif %}>{{ country }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Buttons -->
+      <div class="d-flex justify-content-between">
+        <button type="reset" class="btn btn-outline-secondary">Reset</button>
+        <button type="submit" class="btn btn-success">Save & Next</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  flatpickr("#birthdatePicker", {
+    dateFormat: "Y-m-d",
+    maxDate: "today",
+    altInput: true,
+    altFormat: "F j, Y",
+    allowInput: true,
+  });
+</script>
+
+{% endblock %}
